@@ -25,6 +25,10 @@ Or from source::
 
     $ sudo ./setup.py install
 
+If you want to use ``--upload`` you also need fabric::
+
+    $ sudo pip install fabric
+
 Examples
 --------
 
