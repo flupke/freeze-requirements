@@ -10,8 +10,12 @@ import functools
 import uuid
 
 from setuptools.package_index import distros_for_filename
-from fabric.api import env, run, put
-from fabric.contrib.files import exists
+try:
+    from fabric.api import env, run, put
+    from fabric.contrib.files import exists
+    fabric_present = True
+except ImportError:
+    fabric_present = False
 
 
 TEMPFILES_PREFIX = 'freeze-requirements-'
@@ -48,11 +52,10 @@ def main():
         output_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(shutil.rmtree, output_dir)
 
-    if options.remote_pip and not options.upload:
-        print 'You must specify --upload to use --remote-pip'
-        sys.exit(1)
-
     if options.upload:
+        if not fabric_present:
+            print 'You need to install fabric to use --upload'
+            sys.exit(1)
         try:
             env.host_string, remote_dir = options.upload.split(':', 1)
         except ValueError:
