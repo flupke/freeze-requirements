@@ -37,6 +37,8 @@ def main():
             help='run pip on the destination host')
     parser.add_argument('--upload', '-u', help='upload files here; use '
             'user@host:/remote/dir syntax')
+    parser.add_argument('--cache', '-c', help='make pip use this directory '
+            'as a cache for downloaded packages')
     options = parser.parse_args()
 
     # Verify options
@@ -72,7 +74,7 @@ def main():
 
     # Alias functions to run pip locally or on the remote host
     if options.remote_pip:
-        run_pip = functools.partial(run, stdout=sys.stderr)
+        run_cmd = functools.partial(run, stdout=sys.stderr)
         mkdtemp = remote_mkdtemp
         listdir = remote_listdir
         rmtree = remote_rmtree
@@ -93,7 +95,7 @@ def main():
         run('mkdir %s' % output_dir, stdout=sys.stderr)
         print(file=sys.stderr)
     else:
-        run_pip = functools.partial(subprocess.check_call, shell=True,
+        run_cmd = functools.partial(subprocess.check_call, shell=True,
                 stdout=sys.stderr)
         mkdtemp = tempfile.mkdtemp
         listdir = os.listdir
@@ -109,7 +111,11 @@ def main():
             original_requirements, options.requirements):
         temp_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(rmtree, temp_dir)
-        run_pip('pip install -r %s --download %s' % (requirement, temp_dir))
+        pip_cmd = 'pip install -r %s --download %s' % (requirement, temp_dir)
+        if options.cache:
+            run_cmd('mkdir -p %s' % options.cache)
+            pip_cmd += ' --download-cache %s' % options.cache
+        run_cmd(pip_cmd)
         requirements_packages.append((original_requirement, listdir(temp_dir)))
         move(op.join(temp_dir, '*'), output_dir)
     print(file=sys.stderr)
