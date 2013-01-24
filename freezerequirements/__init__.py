@@ -15,6 +15,7 @@ from setuptools.package_index import distros_for_filename
 try:
     from fabric.api import env, run, put
     from fabric.contrib.files import exists
+    import fabric.state
     fabric_present = True
 except ImportError:
     fabric_present = False
@@ -63,6 +64,8 @@ def main():
             print('You need to install fabric to use --upload', 
                     file=sys.stderr)
             sys.exit(1)
+        # Hide fabric commands logs
+        fabric.state.output.running = False
         try:
             env.host_string, remote_dir = options.upload.split(':', 1)
         except ValueError:
