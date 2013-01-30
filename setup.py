@@ -39,7 +39,7 @@ setup(name='freeze-requirements',
     install_requires=install_requires,
     entry_points={
         'console_scripts': [
-            'freeze-requirements=freezerequirements:main'
+            'freeze-requirements=freezerequirements.scripts:main'
         ]
     }
 )
