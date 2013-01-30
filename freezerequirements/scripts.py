@@ -125,7 +125,8 @@ def main():
         if options.cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
-                print('"%s" dependencies found in cache' % original_requirement)
+                print('"%s" dependencies found in cache' %
+                        original_requirement, file=sys.stderr)
                 with open(deps_cache_path) as fp:
                     requirements_packages.append((original_requirement,
                         json.load(fp)))
