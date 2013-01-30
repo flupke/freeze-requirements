@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import functools
 import uuid
+import json
 
 try:
     from fabric.api import env, run, put
@@ -19,7 +20,7 @@ try:
 except ImportError:
     fabric_present = False
     
-from freezerequirements.utils import likely_distro
+from freezerequirements.utils import likely_distro, cache_dir, cache_path
 
 
 TEMPFILES_PREFIX = 'freeze-requirements-'
@@ -41,6 +42,9 @@ def main():
             'user@host:/remote/dir syntax')
     parser.add_argument('--cache', '-c', help='make pip use this directory '
             'as a cache for downloaded packages')
+    parser.add_argument('--cache-dependencies', action='store_true',
+            help='use a cache to speed up processing of unchanged '
+            'requirements files')
     options = parser.parse_args()
 
     # Verify options
@@ -75,6 +79,11 @@ def main():
             sys.exit(1)
 
     original_requirements = options.requirements
+
+    if options.cache_dependencies:
+        reqs_cache_dir = cache_dir()
+        if not op.exists(reqs_cache_dir):
+            os.makedirs(reqs_cache_dir)
 
     # Alias functions to run pip locally or on the remote host
     if options.remote_pip:
@@ -113,6 +122,14 @@ def main():
     requirements_packages = []
     for original_requirement, requirement in zip(
             original_requirements, options.requirements):
+        if options.cache_dependencies:
+            deps_cache_path = cache_path(original_requirement)
+            if op.exists(deps_cache_path):
+                print('"%s" dependencies found in cache' % original_requirement)
+                with open(deps_cache_path) as fp:
+                    requirements_packages.append((original_requirement,
+                        json.load(fp)))
+                continue
         temp_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(rmtree, temp_dir)
         pip_cmd = 'pip install -r %s --download %s' % (requirement, temp_dir)
@@ -120,7 +137,11 @@ def main():
             run_cmd('mkdir -p %s' % options.cache)
             pip_cmd += ' --download-cache %s' % options.cache
         run_cmd(pip_cmd)
-        requirements_packages.append((original_requirement, listdir(temp_dir)))
+        dependencies = listdir(temp_dir)
+        requirements_packages.append((original_requirement, dependencies))
+        if options.cache_dependencies:
+            with open(deps_cache_path, 'w') as fp:
+                json.dump(dependencies, fp)
         move(op.join(temp_dir, '*'), output_dir)
     print(file=sys.stderr)
 
