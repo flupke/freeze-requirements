@@ -177,8 +177,8 @@ def main():
         print('# Frozen requirements for "%s":' % requirements_file)
         print()
         seen = set()
-        for package in packages:
-            distro = likely_distro(package)
+        distros = [likely_distro(p) for p in packages]
+        for distro in sorted(distros, key=lambda d: d.key):
             if distro.key in seen:
                 continue
             seen.add(distro.key)
