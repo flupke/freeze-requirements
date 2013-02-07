@@ -20,7 +20,8 @@ try:
 except ImportError:
     fabric_present = False
     
-from freezerequirements.utils import likely_distro, cache_dir, cache_path
+from freezerequirements.utils import (likely_distro, cache_dir, cache_path,
+        group_and_select_packages)
 
 
 TEMPFILES_PREFIX = 'freeze-requirements-'
@@ -165,14 +166,26 @@ def main():
             put_package(package, dst_dir)
     print(file=sys.stderr)
 
+    # Group packages by distribution key and sort them by version
+    grouped_packages = group_and_select_packages(pkgs for reqs_file, pkgs in
+            requirements_packages)
+
     # Print frozen requirements for each input requirements file
     print(SEPARATOR, file=sys.stderr)
     for requirements_file, packages in requirements_packages:
         print('# Frozen requirements for "%s":' % requirements_file)
         print()
+        seen = set()
         for package in packages:
             distro = likely_distro(package)
-            print('%s==%s' % (distro.key, distro.version))
+            if distro.key in seen:
+                continue
+            seen.add(distro.key)
+            versions = grouped_packages[distro.key]
+            if len(versions) > 1:
+                print('# Picked highest version of %s in: %s' % (distro.key,
+                        ', '.join(versions)))
+            print('%s==%s' % (distro.key, versions[0]))
         print()
 
 

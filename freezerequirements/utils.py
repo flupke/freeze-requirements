@@ -3,6 +3,8 @@ import urllib
 import string
 import hashlib
 import os
+from collections import defaultdict
+from distutils.version import LooseVersion
 
 from setuptools.package_index import distros_for_filename
 
@@ -43,3 +45,24 @@ def cache_path(filename):
     filename = op.abspath(filename)
     key = "%s-%s" % (urllib.quote_plus(filename), file_hash(filename))
     return op.join(cache_dir(), key)
+
+
+def group_and_select_packages(packages_groups):
+    """
+    Group the list of packages filenames lists *packages_groups* by
+    distribution key, and sort them by version number, highest first.
+
+    Returns a ``{distro_key: [distro_version1, distro_version2, ...],
+    distro_key2: ...}`` mapping.
+    """
+    grouped_packages = defaultdict(list)
+    for packages in packages_groups:
+        for package in packages:
+            distro = likely_distro(package)
+            grouped_packages[distro.key].append(
+                    (distro.version, LooseVersion(distro.version)))
+    ret = {}
+    for key, packages in grouped_packages.items():
+        packages.sort(key=lambda (_, version): version, reverse=True)
+        ret[key] = [v for v, _ in packages]
+    return ret
