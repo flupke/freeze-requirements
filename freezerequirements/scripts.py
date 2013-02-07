@@ -9,19 +9,20 @@ import argparse
 import tempfile
 import shutil
 import functools
-import uuid
 import json
 
 try:
     from fabric.api import env, run, put
-    from fabric.contrib.files import exists
     import fabric.state
     fabric_present = True
 except ImportError:
     fabric_present = False
+
     
 from freezerequirements.utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages)
+from freezerequirements.operations import (remote_move, local_move,
+        remote_mkdtemp, remote_listdir, remote_rmtree)
 
 
 TEMPFILES_PREFIX = 'freeze-requirements-'
@@ -187,41 +188,4 @@ def main():
                         ', '.join(versions)))
             print('%s==%s' % (distro.key, versions[0]))
         print()
-
-
-def remote_move(src, dst):
-    """
-    Move a file on a remote host.
-    """
-    run('mv -fv %s %s' % (src, dst), stdout=sys.stderr)
-
-
-def local_move(src, dst):
-    """
-    Move a file on local host.
-    """
-    subprocess.check_call('mv -fv %s %s' % (src, dst), shell=True,
-            stdout=sys.stderr)
-
-
-def remote_mkdtemp(prefix='', dir='/tmp'):
-    """
-    Create a remote temporary directory.
-    """
-    while True:
-        temp_dir = op.join(dir, '%s%s' % (prefix, uuid.uuid4().hex))
-        if not exists(temp_dir):
-            run('mkdir %s' % temp_dir, stdout=sys.stderr)
-            break
-    return temp_dir
-
-
-def remote_listdir(location):
-    return run('ls %s' % location, stdout=sys.stderr).split()
-
-
-def remote_rmtree(location):
-    run('rm -rf %s' % location, stdout=sys.stderr)
-
-
 
