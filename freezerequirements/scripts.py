@@ -173,10 +173,10 @@ def main():
 
     # Print frozen requirements for each input requirements file
     print(SEPARATOR, file=sys.stderr)
+    seen = set()
     for requirements_file, packages in requirements_packages:
         print('# Frozen requirements for "%s":' % requirements_file)
         print()
-        seen = set()
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
             if distro.key in seen:
