@@ -47,6 +47,8 @@ def main():
     parser.add_argument('--cache-dependencies', action='store_true',
             help='use a cache to speed up processing of unchanged '
             'requirements files')
+    parser.add_argument('--use-mirrors', action='store_true',
+            help='use pypi mirrors')
     options = parser.parse_args()
 
     # Verify options
@@ -139,6 +141,8 @@ def main():
         if options.cache:
             run_cmd('mkdir -p %s' % options.cache)
             pip_cmd += ' --download-cache %s' % options.cache
+        if options.use_mirrors:
+            pip_cmd += ' --use-mirrors'
         run_cmd(pip_cmd)
         dependencies = listdir(temp_dir)
         requirements_packages.append((original_requirement, dependencies))
