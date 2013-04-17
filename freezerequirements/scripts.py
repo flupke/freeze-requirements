@@ -49,6 +49,10 @@ def main():
             'requirements files')
     parser.add_argument('--use-mirrors', action='store_true',
             help='use pypi mirrors')
+    parser.add_argument('--connection-attempts', type=int, default=1,
+            help='number of fabric connection attempts')
+    parser.add_argument('--timeout', type=int, default=10,
+            help='fabric connection timeout')
     options = parser.parse_args()
 
     # Verify options
@@ -81,6 +85,9 @@ def main():
             print('Invalid upload destination: %s' % options.upload, 
                     file=sys.stderr)
             sys.exit(1)
+        # Apply fabric options
+        env.connection_attempts = options.connection_attempts
+        env.timeout = options.timeout
 
     original_requirements = options.requirements
 
