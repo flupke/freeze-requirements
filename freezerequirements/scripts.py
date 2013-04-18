@@ -53,6 +53,7 @@ def main():
             help='number of fabric connection attempts')
     parser.add_argument('--timeout', type=int, default=10,
             help='fabric connection timeout')
+    parser.add_argument('--pip', default='pip', help='pip executable')
     options = parser.parse_args()
 
     # Verify options
@@ -144,7 +145,8 @@ def main():
                 continue
         temp_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(rmtree, temp_dir)
-        pip_cmd = 'pip install -r %s --download %s' % (requirement, temp_dir)
+        pip_cmd = '%s install -r %s --download %s' % (options.pip, requirement,
+                temp_dir)
         if options.cache:
             run_cmd('mkdir -p %s' % options.cache)
             pip_cmd += ' --download-cache %s' % options.cache
