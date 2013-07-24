@@ -12,7 +12,7 @@ from setuptools.package_index import distros_for_filename
 def likely_distro(filename):
     """
     Get the first distro as returned by :func:`distros_for_filename` that has a
-    version that starts withe a number.
+    version that starts with a number.
     """
     distros = [d for d in distros_for_filename(filename) 
             if d.version 

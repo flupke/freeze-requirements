@@ -54,6 +54,13 @@ def main():
     parser.add_argument('--timeout', type=int, default=10,
             help='fabric connection timeout')
     parser.add_argument('--pip', default='pip', help='pip executable')
+    parser.add_argument('--wheel', action='store_true', 
+            help='also build wheel packages from the requirements')
+    parser.add_argument('--allow-external', action='append',
+            dest='pip_externals')
+    parser.add_argument('--allow-all-external', action='store_true')
+    parser.add_argument('--allow-insecure', action='append',
+            dest='pip_insecures')
     options = parser.parse_args()
 
     # Verify options
@@ -152,6 +159,14 @@ def main():
             pip_cmd += ' --download-cache %s' % options.cache
         if options.use_mirrors:
             pip_cmd += ' --use-mirrors'
+        if options.pip_externals:
+            pip_cmd += ' --allow-external '
+            pip_cmd += ' --allow-external '.join(options.pip_externals)
+        if options.allow_all_external:
+            pip_cmd += ' --allow-all-external'
+        if options.pip_insecures:
+            pip_cmd += ' --allow-insecure '
+            pip_cmd += ' --allow-insecure '.join(options.pip_insecures)
         run_cmd(pip_cmd)
         dependencies = listdir(temp_dir)
         requirements_packages.append((original_requirement, dependencies))
@@ -161,6 +176,18 @@ def main():
         move(op.join(temp_dir, '*'), output_dir)
     print(file=sys.stderr)
 
+    packages = [op.join(output_dir, p) for p in listdir(output_dir)]
+
+    # Build wheel packages
+    if options.wheel:
+        wheels = {}
+        for package in packages:
+            wheel_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
+            atexit.register(rmtree, wheel_dir)
+            run_cmd('%s wheel --no-deps --wheel-dir %s %s' % 
+                    (options.pip, wheel_dir, package))
+            wheels[package] = op.join(wheel_dir, listdir(wheel_dir)[0])
+
     # Upload or move packages to their final destination
     if options.upload:
         print(SEPARATOR, file=sys.stderr)
@@ -169,7 +196,6 @@ def main():
                     file=sys.stderr)
         else:
             print('Uploading packages...', file=sys.stderr)
-        packages = [op.join(output_dir, p) for p in listdir(output_dir)]
         created_dirs = set()
         for package in packages:
             distro = likely_distro(package)
@@ -178,6 +204,8 @@ def main():
                 run('mkdir -p %s' % dst_dir, stdout=sys.stderr)
                 created_dirs.add(dst_dir)
             put_package(package, dst_dir)
+            if options.wheel:
+                put_package(wheels[package], dst_dir)
     print(file=sys.stderr)
 
     # Group packages by distribution key and sort them by version
