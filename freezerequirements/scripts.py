@@ -141,6 +141,7 @@ def main():
     requirements_packages = []
     for original_requirement, requirement in zip(
             original_requirements, options.requirements):
+        # Check cache
         if options.cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
@@ -150,6 +151,7 @@ def main():
                     requirements_packages.append((original_requirement,
                         json.load(fp)))
                 continue
+        # Download requirements
         temp_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(rmtree, temp_dir)
         pip_cmd = '%s install -r %s --download %s' % (options.pip, requirement,
@@ -168,28 +170,30 @@ def main():
             pip_cmd += ' --allow-insecure '
             pip_cmd += ' --allow-insecure '.join(options.pip_insecures)
         run_cmd(pip_cmd)
+        # List downloaded packages
         dependencies = listdir(temp_dir)
         requirements_packages.append((original_requirement, dependencies))
+        # Build wheel packages
+        if options.wheel:
+            wheels = {}
+            for package in dependencies:
+                package_path = op.join(temp_dir, package)
+                final_path = op.join(output_dir, package)
+                wheel_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
+                atexit.register(rmtree, wheel_dir)
+                run_cmd('%s wheel --no-deps --wheel-dir %s %s' % 
+                        (options.pip, wheel_dir, package_path))
+                wheels[final_path] = op.join(wheel_dir, listdir(wheel_dir)[0])
+        # Update cache and move packages to their final destinations
         if options.cache_dependencies:
             with open(deps_cache_path, 'w') as fp:
                 json.dump(dependencies, fp)
         move(op.join(temp_dir, '*'), output_dir)
     print(file=sys.stderr)
 
-    packages = [op.join(output_dir, p) for p in listdir(output_dir)]
-
-    # Build wheel packages
-    if options.wheel:
-        wheels = {}
-        for package in packages:
-            wheel_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
-            atexit.register(rmtree, wheel_dir)
-            run_cmd('%s wheel --no-deps --wheel-dir %s %s' % 
-                    (options.pip, wheel_dir, package))
-            wheels[package] = op.join(wheel_dir, listdir(wheel_dir)[0])
-
     # Upload or move packages to their final destination
-    if options.upload:
+    packages = [op.join(output_dir, p) for p in listdir(output_dir)]
+    if packages and options.upload:
         print(SEPARATOR, file=sys.stderr)
         if options.remote_pip:
             print('Moving packages to their final destination...', 
