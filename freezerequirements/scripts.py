@@ -61,6 +61,10 @@ def main():
     parser.add_argument('--allow-all-external', action='store_true')
     parser.add_argument('--allow-insecure', action='append',
             dest='pip_insecures')
+    parser.add_argument('--exclude', '-x', action='append', metavar='PACKAGE',
+            dest='excluded_packages', default=[], help='exclude PACKAGE from '
+            'the frozen requirements file; use --exclude multiple times to '
+            'exclude multiple packages')
     options = parser.parse_args()
 
     # Verify options
@@ -224,7 +228,7 @@ def main():
         print()
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
-            if distro.key in seen:
+            if distro.key in seen or distro.key in options.excluded_packages:
                 continue
             seen.add(distro.key)
             versions = grouped_packages[distro.key]
