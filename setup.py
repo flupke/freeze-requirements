@@ -7,7 +7,7 @@ README = open(os.path.join(here, 'README.rst')).read()
 NEWS = open(os.path.join(here, 'NEWS.txt')).read()
 
 
-version = '0.1'
+version = '0.2'
 
 install_requires = [
     # List your project dependencies here.
@@ -39,7 +39,7 @@ setup(name='freeze-requirements',
     install_requires=install_requires,
     entry_points={
         'console_scripts': [
-            'freeze-requirements=freezerequirements:main'
+            'freeze-requirements=freezerequirements.scripts:main'
         ]
     }
 )
