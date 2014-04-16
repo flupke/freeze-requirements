@@ -223,6 +223,8 @@ def main():
     # Print frozen requirements for each input requirements file
     print(SEPARATOR, file=sys.stderr)
     seen = set()
+    print('# This file has been automatically generated, DO NOT EDIT!')
+    print()
     for requirements_file, packages in requirements_packages:
         print('# Frozen requirements for "%s":' % requirements_file)
         print()
