@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import functools
 import json
+import collections
 
 try:
     from fabric.api import env, run, put
@@ -65,6 +66,10 @@ def main():
             dest='excluded_packages', default=[], help='exclude PACKAGE from '
             'the frozen requirements file; use --exclude multiple times to '
             'exclude multiple packages')
+    parser.add_argument('--use-ext-wheel', action='append', metavar='PACKAGE',
+            dest='ext_wheels', default=[], help='do not try to build wheel '
+            'for PACKAGE, but still include it in the frozen output; use '
+            '--use-ext-wheel multiple times to specify multiple packages')
     options = parser.parse_args()
 
     # Verify options
@@ -83,6 +88,7 @@ def main():
     else:
         output_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(shutil.rmtree, output_dir)
+    options.excluded_packages.extend(options.ext_wheels)
 
     if options.upload:
         if not fabric_present:
@@ -108,6 +114,7 @@ def main():
 
     # Filter excluded packages from requirements files
     filtered_requirements_refs = []
+    ext_wheels_lines = collections.defaultdict(list)
     if options.excluded_packages:
         for i, requirement in enumerate(options.requirements):
             excluded_something = False
@@ -119,6 +126,8 @@ def main():
                         if pkg in line:
                             excluded_package = True
                             excluded_something = True
+                            if pkg in options.ext_wheels:
+                                ext_wheels_lines[requirement].append(line)
                             break
                     if not excluded_package:
                         filtered_lines.append(line)
@@ -266,6 +275,8 @@ def main():
                 print('# Picked highest version of %s in: %s' % (distro.key,
                         ', '.join(versions)))
             print('%s==%s' % (distro.key, versions[0]))
+        for pkg in ext_wheels_lines[requirements_file]:
+            print(pkg.strip())
         print()
 
 
