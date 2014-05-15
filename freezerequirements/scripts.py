@@ -10,6 +10,7 @@ import tempfile
 import shutil
 import functools
 import json
+import collections
 
 try:
     from fabric.api import env, run, put
@@ -18,7 +19,7 @@ try:
 except ImportError:
     fabric_present = False
 
-    
+
 from freezerequirements.utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages)
 from freezerequirements.operations import (remote_move, local_move,
@@ -34,11 +35,11 @@ def main():
     parser = argparse.ArgumentParser(description='Download dependencies '
         'from requirements file(s) and upload them to your private pypi '
         'repository')
-    parser.add_argument('requirements', nargs='+', 
+    parser.add_argument('requirements', nargs='+',
             help='a pip requirements file, you can specify multiple '
             'requirements files if needed')
     parser.add_argument('--output', '-o', help='put downloaded files here')
-    parser.add_argument('--remote-pip', '-r', action='store_true', 
+    parser.add_argument('--remote-pip', '-r', action='store_true',
             help='run pip on the destination host')
     parser.add_argument('--upload', '-u', help='upload files here; use '
             'user@host:/remote/dir syntax')
@@ -54,7 +55,7 @@ def main():
     parser.add_argument('--timeout', type=int, default=10,
             help='fabric connection timeout')
     parser.add_argument('--pip', default='pip', help='pip executable')
-    parser.add_argument('--wheel', action='store_true', 
+    parser.add_argument('--wheel', action='store_true',
             help='also build wheel packages from the requirements')
     parser.add_argument('--allow-external', action='append',
             dest='pip_externals')
@@ -65,6 +66,10 @@ def main():
             dest='excluded_packages', default=[], help='exclude PACKAGE from '
             'the frozen requirements file; use --exclude multiple times to '
             'exclude multiple packages')
+    parser.add_argument('--use-ext-wheel', action='append', metavar='PACKAGE',
+            dest='ext_wheels', default=[], help='do not try to build wheel '
+            'for PACKAGE, but still include it in the frozen output; use '
+            '--use-ext-wheel multiple times to specify multiple packages')
     options = parser.parse_args()
 
     # Verify options
@@ -76,17 +81,18 @@ def main():
         sys.exit(1)
     if options.output:
         if not op.isdir(options.output):
-            print('Output directory does not exist: %s' % options.output, 
+            print('Output directory does not exist: %s' % options.output,
                     file=sys.stderr)
             sys.exit(1)
         output_dir = options.output
     else:
         output_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(shutil.rmtree, output_dir)
+    options.excluded_packages.extend(options.ext_wheels)
 
     if options.upload:
         if not fabric_present:
-            print('You need to install fabric to use --upload', 
+            print('You need to install fabric to use --upload',
                     file=sys.stderr)
             sys.exit(1)
         # Hide fabric commands logs
@@ -94,19 +100,47 @@ def main():
         try:
             env.host_string, remote_dir = options.upload.split(':', 1)
         except ValueError:
-            print('Invalid upload destination: %s' % options.upload, 
+            print('Invalid upload destination: %s' % options.upload,
                     file=sys.stderr)
             sys.exit(1)
         # Apply fabric options
         env.connection_attempts = options.connection_attempts
         env.timeout = options.timeout
 
-    original_requirements = options.requirements
-
     if options.cache_dependencies:
         reqs_cache_dir = cache_dir()
         if not op.exists(reqs_cache_dir):
             os.makedirs(reqs_cache_dir)
+
+    # Filter excluded packages from requirements files
+    filtered_requirements_refs = []
+    ext_wheels_lines = collections.defaultdict(list)
+    if options.excluded_packages:
+        for i, requirement in enumerate(options.requirements):
+            excluded_something = False
+            filtered_lines = []
+            with open(requirement) as fp:
+                for line in fp:
+                    excluded_package = False
+                    for pkg in options.excluded_packages:
+                        if pkg in line:
+                            excluded_package = True
+                            excluded_something = True
+                            if pkg in options.ext_wheels:
+                                ext_wheels_lines[requirement].append(line)
+                            break
+                    if not excluded_package:
+                        filtered_lines.append(line)
+            if excluded_something:
+                filtered_reqs = tempfile.NamedTemporaryFile(
+                        prefix='freeze-requirements-filtered-reqs-')
+                filtered_reqs.writelines(filtered_lines)
+                filtered_reqs.flush()
+                filtered_reqs.name = StringWithAttrs(filtered_reqs.name)
+                filtered_reqs.name.original_name = requirement
+                options.requirements[i] = filtered_reqs.name
+                # Keep a reference to tempfile to avoid garbage collection
+                filtered_requirements_refs.append(filtered_reqs)
 
     # Alias functions to run pip locally or on the remote host
     if options.remote_pip:
@@ -121,12 +155,14 @@ def main():
         print('Uploading requirements...', file=sys.stderr)
         temp_dir = remote_mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(run, 'rm -rf %s' % temp_dir, stdout=sys.stderr)
-        remote_requirements = []
         for i, requirement in enumerate(options.requirements):
             req_dir = op.join(temp_dir, str(i))
             run('mkdir %s' % req_dir, stdout=sys.stderr)
-            remote_requirements.extend(put(requirement, req_dir))
-        options.requirements = remote_requirements
+            remote_path = list(put(requirement, req_dir))[0]
+            remote_path = StringWithAttrs(remote_path)
+            remote_path.original_name = getattr(requirement, 'original_name',
+                    requirement)
+            options.requirements[i] = remote_path
         output_dir = op.join(temp_dir, 'packages')
         run('mkdir %s' % output_dir, stdout=sys.stderr)
         print(file=sys.stderr)
@@ -143,9 +179,10 @@ def main():
     print(SEPARATOR, file=sys.stderr)
     print('Downloading packages...', file=sys.stderr)
     requirements_packages = []
-    for original_requirement, requirement in zip(
-            original_requirements, options.requirements):
+    for requirement in options.requirements:
         # Check cache
+        original_requirement = getattr(requirement, 'original_name',
+                requirement)
         if options.cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
@@ -185,7 +222,7 @@ def main():
                 final_path = op.join(output_dir, package)
                 wheel_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
                 atexit.register(rmtree, wheel_dir)
-                run_cmd('%s wheel --no-deps --wheel-dir %s %s' % 
+                run_cmd('%s wheel --no-deps --wheel-dir %s %s' %
                         (options.pip, wheel_dir, package_path))
                 wheels[final_path] = op.join(wheel_dir, listdir(wheel_dir)[0])
         # Update cache and move packages to their final destinations
@@ -200,7 +237,7 @@ def main():
     if packages and options.upload:
         print(SEPARATOR, file=sys.stderr)
         if options.remote_pip:
-            print('Moving packages to their final destination...', 
+            print('Moving packages to their final destination...',
                     file=sys.stderr)
         else:
             print('Uploading packages...', file=sys.stderr)
@@ -238,5 +275,11 @@ def main():
                 print('# Picked highest version of %s in: %s' % (distro.key,
                         ', '.join(versions)))
             print('%s==%s' % (distro.key, versions[0]))
+        for pkg in ext_wheels_lines[requirements_file]:
+            print(pkg.strip())
         print()
 
+
+class StringWithAttrs(unicode):
+
+    pass
