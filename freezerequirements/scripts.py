@@ -70,7 +70,13 @@ def main():
             dest='ext_wheels', default=[], help='do not try to build wheel '
             'for PACKAGE, but still include it in the frozen output; use '
             '--use-ext-wheel multiple times to specify multiple packages')
+    parser.add_argument('--cache-infos', action='store_true',
+            help='show cache informations for the given requirements')
     options = parser.parse_args()
+
+    if options.cache_infos:
+        show_cache_infos(options.requirements)
+        sys.exit(0)
 
     # Verify options
     if not options.output and not options.upload:
@@ -279,6 +285,17 @@ def main():
         for pkg in ext_wheels_lines[requirements_file]:
             print(pkg.strip())
         print()
+
+
+def show_cache_infos(requirements):
+    '''
+    Print cache information for the given list of requirements.
+    '''
+    for req in requirements:
+        req_cache = cache_path(req)
+        if not op.exists(req_cache):
+            req_cache = 'not cached'
+        print('%s %s' % (req, req_cache))
 
 
 class StringWithAttrs(unicode):
