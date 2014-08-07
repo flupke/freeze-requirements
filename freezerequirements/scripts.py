@@ -196,8 +196,8 @@ def main():
         # Download requirements
         temp_dir = mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(rmtree, temp_dir)
-        pip_cmd = '%s install -r %s --download %s' % (options.pip, requirement,
-                temp_dir)
+        pip_cmd = '%s install --no-use-wheel -r %s --download %s' % (
+                options.pip, requirement, temp_dir)
         if options.cache:
             run_cmd('mkdir -p %s' % options.cache)
             pip_cmd += ' --download-cache %s' % options.cache
