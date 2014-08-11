@@ -54,8 +54,11 @@ def main():
         help='Do not try to build wheel for PACKAGE, but still include it in '
         'the frozen output; use --use-ext-wheel multiple times to specify '
         'multiple packages', metavar='PACKAGE')
-def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors, pip,
-        build_wheels, pip_externals, pip_allow_all_external, pip_insecures, excluded_packages, ext_wheels):
+@click.option('--output-index-url', help='Add an --index-url in the generated '
+        'requirements file', metavar='URL')
+def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
+        pip, build_wheels, pip_externals, pip_allow_all_external,
+        pip_insecures, excluded_packages, ext_wheels, output_index_url):
     '''
     Create a frozzen requirement file from one or more requirement files.
     '''
@@ -200,6 +203,8 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors, pip
     seen = set()
     print('# This file has been automatically generated, DO NOT EDIT!')
     print()
+    if output_index_url:
+        print('--index-url %s' % output_index_url)
     for requirements_file, packages in requirements_packages:
         print('# Frozen requirements for "%s":' % requirements_file)
         print()
