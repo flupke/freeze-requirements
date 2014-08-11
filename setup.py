@@ -10,6 +10,7 @@ NEWS = open(os.path.join(here, 'NEWS.txt')).read()
 version = '0.3.2'
 
 install_requires = [
+    'click',
     'sh',
 ]
 

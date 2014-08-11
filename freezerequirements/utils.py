@@ -66,3 +66,13 @@ def group_and_select_packages(packages_groups):
         packages.sort(key=lambda (_, version): version, reverse=True)
         ret[key] = [v for v, _ in packages]
     return ret
+
+
+class StringWithAttrs(unicode):
+    '''
+    A mutable unicode subclass.
+    '''
+
+    pass
+
+

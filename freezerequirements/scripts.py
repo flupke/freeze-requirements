@@ -4,101 +4,105 @@ import os
 import sys
 import atexit
 import os.path as op
-import argparse
 import tempfile
 import shutil
 import json
 import collections
 
 import sh
+import click
 
 from freezerequirements.utils import (likely_distro, cache_dir, cache_path,
-        group_and_select_packages)
+        group_and_select_packages, StringWithAttrs)
 
 
 TEMPFILES_PREFIX = 'freeze-requirements-'
 SEPARATOR = '-' * 78
 
 
+@click.group()
 def main():
-    # Parse arguments
-    parser = argparse.ArgumentParser(description='Download dependencies '
-        'from requirements file(s) and upload them to your private pypi '
-        'repository')
-    parser.add_argument('requirements', nargs='+',
-            help='a pip requirements file, you can specify multiple '
-            'requirements files if needed')
-    parser.add_argument('--output', '-o',
-            help='put downloaded python packages and wheels here')
-    parser.add_argument('--cache', '-c', help='make pip use this directory '
-            'as a cache for downloaded packages')
-    parser.add_argument('--cache-dependencies', action='store_true',
-            help='use a cache to speed up processing of unchanged '
-            'requirements files')
-    parser.add_argument('--use-mirrors', action='store_true',
-            help='use pypi mirrors')
-    parser.add_argument('--pip', default='pip', help='pip executable')
-    parser.add_argument('--wheel', action='store_true',
-            help='also build wheel packages from the requirements')
-    parser.add_argument('--allow-external', action='append', default=[],
-            dest='pip_externals')
-    parser.add_argument('--allow-all-external', action='store_true')
-    parser.add_argument('--allow-insecure', action='append', default=[],
-            dest='pip_insecures')
-    parser.add_argument('--exclude', '-x', action='append', metavar='PACKAGE',
-            dest='excluded_packages', default=[], help='exclude PACKAGE from '
-            'the frozen requirements file; use --exclude multiple times to '
-            'exclude multiple packages')
-    parser.add_argument('--use-ext-wheel', action='append', metavar='PACKAGE',
-            dest='ext_wheels', default=[], help='do not try to build wheel '
-            'for PACKAGE, but still include it in the frozen output; use '
-            '--use-ext-wheel multiple times to specify multiple packages')
-    parser.add_argument('--cache-infos', action='store_true',
-            help='show cache informations for the given requirements')
-    options = parser.parse_args()
+    '''
+    A tool to freeze pip requirements files.
+    '''
 
-    if options.cache_infos:
-        show_cache_infos(options.requirements)
-        sys.exit(0)
 
+@click.command()
+@click.argument('requirements', nargs=-1, type=click.Path(exists=True))
+@click.option('-o', '--output-dir', help='Put downloaded python packages '
+        'and wheels here', metavar='DIR')
+@click.option('-c', '--cache', help='Pip download cache', metavar='DIR')
+@click.option('--use-mirrors/--no-use-mirrors', default=False,
+        help='use pypi mirrors')
+@click.option('--cache-dependencies/--no-cache-dependencies', default=False,
+        help='Use a cache to speed up processing of unchanged requirements '
+        'files')
+@click.option('--pip', default='pip', help='Path to the pip executable',
+        type=click.Path(dir_okay=False))
+@click.option('--build-wheels/--no-build-wheels', default=False,
+        help='Build wheel packages from the requirements')
+@click.option('--allow-external', 'pip_externals', multiple=True,
+        metavar='PACKAGE')
+@click.option('--allow-all-external/--no-allow-all-external',
+        'pip_allow_all_external', default=False)
+@click.option('--allow-insecure', 'pip_insecures', multiple=True,
+        metavar='PACKAGE')
+@click.option('-x', '--exclude', 'excluded_packages', multiple=True,
+        help='Exclude a package from the frozen requirements',
+        metavar='PACKAGE')
+@click.option('--use-ext-wheel', 'ext_wheels', multiple=True,
+        help='Do not try to build wheel for PACKAGE, but still include it in '
+        'the frozen output; use --use-ext-wheel multiple times to specify '
+        'multiple packages', metavar='PACKAGE')
+def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors, pip,
+        build_wheels, pip_externals, pip_allow_all_external, pip_insecures, excluded_packages, ext_wheels):
+    '''
+    Create a frozzen requirement file from one or more requirement files.
+    '''
     # Verify options
-    if options.output:
-        if not op.isdir(options.output):
-            print('Output directory does not exist: %s' % options.output,
+    if output_dir:
+        if not op.isdir(output_dir):
+            print('Output directory does not exist: %s' % output_dir,
                     file=sys.stderr)
             sys.exit(1)
-        output_dir = options.output
-    elif options.wheel:
-        print('Using --wheel without --output makes no sense', file=sys.stderr)
+    elif build_wheels:
+        print('Using --build-wheels without --output makes no sense',
+                file=sys.stderr)
         sys.exit(1)
+
+    # Pre-process options
+    excluded_packages = list(excluded_packages)
+    requirements = list(requirements)
+    excluded_packages.extend(ext_wheels)
+
+    # Create packages collect dir
     packages_collect_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
     atexit.register(shutil.rmtree, packages_collect_dir)
-    options.excluded_packages.extend(options.ext_wheels)
 
-    if options.cache_dependencies:
+    if cache_dependencies:
         reqs_cache_dir = cache_dir()
         if not op.exists(reqs_cache_dir):
             os.makedirs(reqs_cache_dir)
 
     # Prepare reused shell commands
-    pip = sh.Command(options.pip)
+    pip = sh.Command(pip)
     move_forced = sh.mv.bake('-fv')
 
     # Filter excluded packages from requirements files
     filtered_requirements_refs = []
     ext_wheels_lines = collections.defaultdict(list)
-    if options.excluded_packages:
-        for i, requirement in enumerate(options.requirements):
+    if excluded_packages:
+        for i, requirement in enumerate(requirements):
             excluded_something = False
             filtered_lines = []
             with open(requirement) as fp:
                 for line in fp:
                     excluded_package = False
-                    for pkg in options.excluded_packages:
+                    for pkg in excluded_packages:
                         if pkg in line:
                             excluded_package = True
                             excluded_something = True
-                            if pkg in options.ext_wheels:
+                            if pkg in ext_wheels:
                                 ext_wheels_lines[requirement].append(line)
                             break
                     if not excluded_package:
@@ -110,7 +114,7 @@ def main():
                 filtered_reqs.flush()
                 filtered_reqs.name = StringWithAttrs(filtered_reqs.name)
                 filtered_reqs.name.original_name = requirement
-                options.requirements[i] = filtered_reqs.name
+                requirements[i] = filtered_reqs.name
                 # Keep a reference to tempfile to avoid garbage collection
                 filtered_requirements_refs.append(filtered_reqs)
 
@@ -118,11 +122,11 @@ def main():
     print(SEPARATOR, file=sys.stderr)
     print('Downloading packages...', file=sys.stderr)
     requirements_packages = []
-    for requirement in options.requirements:
+    for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
                 requirement)
-        if options.cache_dependencies:
+        if cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
                 print('"%s" dependencies found in cache (%s)' %
@@ -137,24 +141,24 @@ def main():
         atexit.register(shutil.rmtree, temp_dir)
         pip_args = ['--no-use-wheel']
         pip_kwargs = {'requirement': requirement, 'download': temp_dir}
-        if options.cache:
-            if not op.exists(options.cache):
-                os.makedirs(options.cache)
-            pip_kwargs['download_cache'] = options.cache
-        if options.use_mirrors:
+        if cache:
+            if not op.exists(cache):
+                os.makedirs(cache)
+            pip_kwargs['download_cache'] = cache
+        if use_mirrors:
             pip_args.append('--use-mirrors')
-        if options.allow_all_external:
+        if pip_allow_all_external:
             pip_args.append(' --allow-all-external')
-        for external in options.pip_externals:
+        for external in pip_externals:
             pip_args += ['--allow-external', external]
-        for insecure in options.pip_insecures:
+        for insecure in pip_insecures:
             pip_args += ['--allow-insecure', insecure]
         pip.install(*pip_args, **pip_kwargs)
         # List downloaded packages
         dependencies = os.listdir(temp_dir)
         requirements_packages.append((original_requirement, dependencies))
         # Build wheel packages
-        if options.wheel:
+        if build_wheels:
             wheels = {}
             for package in dependencies:
                 package_path = op.join(temp_dir, package)
@@ -164,7 +168,7 @@ def main():
                 pip.wheel('--no-deps', package_path, wheel_dir=wheel_dir)
                 wheels[final_path] = op.join(wheel_dir, os.listdir(wheel_dir)[0])
         # Update cache and move packages to the packages collect dir
-        if options.cache_dependencies:
+        if cache_dependencies:
             with open(deps_cache_path, 'w') as fp:
                 json.dump(dependencies, fp)
         move_forced(op.join(temp_dir, '*'), packages_collect_dir)
@@ -183,7 +187,7 @@ def main():
             if not op.exists(dst_dir):
                 os.makedirs(dst_dir)
             move_forced(package, dst_dir)
-            if options.wheel:
+            if build_wheels:
                 move_forced(wheels[package], dst_dir)
     print(file=sys.stderr)
 
@@ -201,7 +205,7 @@ def main():
         print()
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
-            if distro.key in seen or distro.key in options.excluded_packages:
+            if distro.key in seen or distro.key in excluded_packages:
                 continue
             seen.add(distro.key)
             versions = grouped_packages[distro.key]
@@ -214,7 +218,9 @@ def main():
         print()
 
 
-def show_cache_infos(requirements):
+@click.command()
+@click.option('requirements', nargs=-1, help='a pip requirements file')
+def cache_infos(requirements):
     '''
     Print cache information for the given list of requirements.
     '''
@@ -225,6 +231,5 @@ def show_cache_infos(requirements):
         print('%s %s' % (req, req_cache))
 
 
-class StringWithAttrs(unicode):
-
-    pass
+main.add_command(freeze)
+main.add_command(cache_infos)
