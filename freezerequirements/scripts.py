@@ -28,7 +28,8 @@ def main():
 
 
 @click.command()
-@click.argument('requirements', nargs=-1, type=click.Path(exists=True))
+@click.argument('requirements', nargs=-1,
+        type=click.Path(exists=True, dir_okay=False))
 @click.option('-o', '--output-dir', help='Put downloaded python packages '
         'and wheels here', metavar='DIR')
 @click.option('-c', '--cache', help='Pip download cache', metavar='DIR')
