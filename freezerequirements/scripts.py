@@ -32,6 +32,9 @@ def main():
         type=click.Path(exists=True, dir_okay=False))
 @click.option('-o', '--output-dir', help='Put downloaded python packages '
         'and wheels here', metavar='DIR')
+@click.option('-m', '--merged-requirements', type=click.File(mode='w'),
+        default='-', help='Merge all requirements in FILE, default is stdout',
+        metavar='FILE')
 @click.option('-c', '--cache', help='Pip download cache', metavar='DIR')
 @click.option('--use-mirrors/--no-use-mirrors', default=False,
         help='use pypi mirrors')
@@ -59,7 +62,8 @@ def main():
         'requirements file', metavar='URL')
 def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         pip, build_wheels, pip_externals, pip_allow_all_external,
-        pip_insecures, excluded_packages, ext_wheels, output_index_url):
+        pip_insecures, excluded_packages, ext_wheels, output_index_url,
+        merged_requirements):
     '''
     Create a frozzen requirement file from one or more requirement files.
     '''
@@ -90,7 +94,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
 
     # Prepare reused shell commands
     pip = sh.Command(pip)
-    move_forced = sh.mv.bake('-fv')
+    move_forced = sh.mv.bake('-f')
 
     # Filter excluded packages from requirements files
     filtered_requirements_refs = []
@@ -163,6 +167,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         requirements_packages.append((original_requirement, dependencies))
         # Build wheel packages
         if build_wheels:
+            print('Building wheels...', file=sys.stderr)
             wheels = {}
             for package in dependencies:
                 package_path = op.join(temp_dir, package)
@@ -176,13 +181,11 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
             with open(deps_cache_path, 'w') as fp:
                 json.dump(dependencies, fp)
         move_forced(sh.glob(op.join(temp_dir, '*')), packages_collect_dir)
-    print(file=sys.stderr)
 
     # Move packages to their final destination
     packages = [op.join(packages_collect_dir, p)
             for p in os.listdir(packages_collect_dir)]
     if output_dir and packages:
-        print(SEPARATOR, file=sys.stderr)
         print('Moving packages to their final destination...',
                 file=sys.stderr)
         for package in packages:
@@ -193,7 +196,6 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
             move_forced(package, dst_dir)
             if build_wheels:
                 move_forced(wheels[package], dst_dir)
-    print(file=sys.stderr)
 
     # Group packages by distribution key and sort them by version
     grouped_packages = group_and_select_packages(pkgs for reqs_file, pkgs in
@@ -202,13 +204,16 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
     # Print frozen requirements for each input requirements file
     print(SEPARATOR, file=sys.stderr)
     seen = set()
-    print('# This file has been automatically generated, DO NOT EDIT!')
-    print()
+    print('# This file has been automatically generated, DO NOT EDIT!',
+            file=merged_requirements)
+    print(file=merged_requirements)
     if output_index_url:
-        print('--index-url %s' % output_index_url)
+        print('--index-url %s' % output_index_url, file=merged_requirements)
+        print(file=merged_requirements)
     for requirements_file, packages in requirements_packages:
-        print('# Frozen requirements for "%s":' % requirements_file)
-        print()
+        print('# Frozen requirements for "%s":' % requirements_file,
+                file=merged_requirements)
+        print(file=merged_requirements)
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
             if distro.key in seen or distro.key in excluded_packages:
@@ -217,11 +222,12 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
             versions = grouped_packages[distro.key]
             if len(versions) > 1:
                 print('# Picked highest version of %s in: %s' % (distro.key,
-                        ', '.join(versions)))
-            print('%s==%s' % (distro.key, versions[0]))
+                        ', '.join(versions)), file=merged_requirements)
+            print('%s==%s' % (distro.key, versions[0]),
+                    file=merged_requirements)
         for pkg in ext_wheels_lines[requirements_file]:
-            print(pkg.strip())
-        print()
+            print(pkg.strip(), file=merged_requirements)
+        print(file=merged_requirements)
 
 
 @click.command()
