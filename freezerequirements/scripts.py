@@ -171,7 +171,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors, pip
         if cache_dependencies:
             with open(deps_cache_path, 'w') as fp:
                 json.dump(dependencies, fp)
-        move_forced(op.join(temp_dir, '*'), packages_collect_dir)
+        move_forced(sh.glob(op.join(temp_dir, '*')), packages_collect_dir)
     print(file=sys.stderr)
 
     # Move packages to their final destination
