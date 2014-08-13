@@ -149,7 +149,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                     requirements_packages.append((original_requirement,
                         json.load(fp)))
                 continue
-        print(requirement, file=sys.stderr)
+        print(original_requirement, file=sys.stderr)
         # Download python source packages from requirement file
         temp_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(shutil.rmtree, temp_dir)
