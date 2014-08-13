@@ -39,7 +39,7 @@ def main():
 @click.option('--separate-requirements-suffix', default='-frozen', 
         help='suffix to insert before file extensions to create separate '
         'frozen requirements filenames')
-@click.option('-c', '--cache', help='Pip download cache', metavar='DIR')
+@click.option('-c', '--pip-cache', help='Pip download cache', metavar='DIR')
 @click.option('--use-mirrors/--no-use-mirrors', default=False,
         help='use pypi mirrors')
 @click.option('--cache-dependencies/--no-cache-dependencies', default=False,
@@ -64,8 +64,8 @@ def main():
         'multiple packages', metavar='PACKAGE')
 @click.option('--output-index-url', help='Add an --index-url in the generated '
         'requirements file', metavar='URL')
-def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
-        pip, build_wheels, pip_externals, pip_allow_all_external,
+def freeze(requirements, output_dir, pip_cache, cache_dependencies,
+        use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
         separate_requirements_suffix):
@@ -155,10 +155,10 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         atexit.register(shutil.rmtree, temp_dir)
         pip_args = ['--no-use-wheel']
         pip_kwargs = {'requirement': requirement, 'download': temp_dir}
-        if cache:
-            if not op.exists(cache):
-                os.makedirs(cache)
-            pip_kwargs['download_cache'] = cache
+        if pip_cache:
+            if not op.exists(pip_cache):
+                os.makedirs(pip_cache)
+            pip_kwargs['download_cache'] = pip_cache
         if use_mirrors:
             pip_args.append('--use-mirrors')
         if pip_allow_all_external:
@@ -173,7 +173,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         requirements_packages.append((original_requirement, dependencies))
         # Build wheel packages
         if build_wheels:
-            print('Building wheels...', file=sys.stderr)
+            print('  Building wheels...', file=sys.stderr)
             for package in dependencies:
                 package_path = op.join(temp_dir, package)
                 final_path = op.join(packages_collect_dir, package)
