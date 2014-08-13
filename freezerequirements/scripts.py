@@ -162,7 +162,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         if use_mirrors:
             pip_args.append('--use-mirrors')
         if pip_allow_all_external:
-            pip_args.append(' --allow-all-external')
+            pip_args.append('--allow-all-external')
         for external in pip_externals:
             pip_args += ['--allow-external', external]
         for insecure in pip_insecures:
