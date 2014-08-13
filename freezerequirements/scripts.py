@@ -133,6 +133,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
                 filtered_requirements_refs.append(filtered_reqs)
 
     # Download packages
+    print('Downloading packages...', file=sys.stderr)
     requirements_packages = []
     wheels = {}
     for requirement in requirements:
@@ -142,14 +143,13 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         if cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
-                print('%s dependencies found in cache (%s)' %
-                        (original_requirement, deps_cache_path),
+                print('%s dependencies found in cache' % original_requirement,
                         file=sys.stderr)
                 with open(deps_cache_path) as fp:
                     requirements_packages.append((original_requirement,
                         json.load(fp)))
                 continue
-        print('Downloading packages...', file=sys.stderr)
+        print(requirement, file=sys.stderr)
         # Download python source packages from requirement file
         temp_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
         atexit.register(shutil.rmtree, temp_dir)
@@ -186,6 +186,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
             with open(deps_cache_path, 'w') as fp:
                 json.dump(dependencies, fp)
         move_forced(sh.glob(op.join(temp_dir, '*')), packages_collect_dir)
+    print(file=sys.stderr)
 
     # Move packages to their final destination
     packages = [op.join(packages_collect_dir, p)
@@ -201,6 +202,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
             move_forced(package, dst_dir)
             if build_wheels:
                 move_forced(wheels[package], dst_dir)
+        print(file=sys.stderr)
 
     # Group packages by distribution key and sort them by version
     grouped_packages = group_and_select_packages(requirements_packages)
@@ -208,7 +210,7 @@ def freeze(requirements, output_dir, cache, cache_dependencies, use_mirrors,
         errors = []
         for distro, versions in grouped_packages.items():
             if len(versions) > 1:
-                lines = ['  - package %s:']
+                lines = ['  - %s:' % distro]
                 lines.extend('    - %s==%s coming from %s' %
                         (distro, version, ', '.join(requirements))
                         for version, requirements in versions)
@@ -245,14 +247,14 @@ def format_requirements(fp, packages_groups, grouped_packages,
     Format the *(requirements_file, packages_list)* list *packages_groups* to
     *fp*.
     '''
-    seen = set()
     fp.write('# This file has been automatically generated, DO NOT EDIT!\n')
     fp.write('\n')
     if output_index_url:
         fp.write('--index-url %s\n' % output_index_url, )
         fp.write('\n')
+    seen = set()
     for requirements_file, packages in packages_groups:
-        fp.write('# Frozen requirements for "%s":\n' % requirements_file)
+        fp.write('# Frozen requirements for "%s"\n' % requirements_file)
         fp.write('\n')
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
@@ -263,10 +265,11 @@ def format_requirements(fp, packages_groups, grouped_packages,
             fp.write('%s==%s\n' % (distro.key, versions[-1][0]))
         for pkg in ext_wheels_lines[requirements_file]:
             fp.write('%s\n' % pkg.strip())
+        fp.write('\n')
 
 
 @click.command()
-@click.option('requirements', nargs=-1, help='a pip requirements file')
+@click.argument('requirements', nargs=-1)
 def cache_infos(requirements):
     '''
     Print cache information for the given list of requirements.
