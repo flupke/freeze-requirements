@@ -7,7 +7,7 @@ README = open(os.path.join(here, 'README.rst')).read()
 NEWS = open(os.path.join(here, 'NEWS.txt')).read()
 
 
-version = '0.4.1'
+version = '0.4.2'
 
 install_requires = [
     'click',
@@ -39,6 +39,9 @@ setup(name='freeze-requirements',
     entry_points={
         'console_scripts': [
             'freeze-requirements=freezerequirements.scripts:main'
-        ]
+        ],
+        'distutils.commands': [
+            'wheel_name=freezerequirements.wheel_name:wheel_name',
+        ],
     }
 )
