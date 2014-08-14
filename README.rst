@@ -1,53 +1,75 @@
 freeze-requirements
 ===================
 
-A script to help creating and maintaining frozen requirements for pip.
+A script to help creating and maintaining frozen requirements for pip, inspired
+by this `Mozilla dev team blog post
+<http://blog.mozilla.org/webdev/2013/01/11/switching-to-pip-for-python-deployments/>`_.
 
-It is inspired by this `Mozilla dev team blog post <http://blog.mozilla.org/webdev/2013/01/11/switching-to-pip-for-python-deployments/>`_, 
-who recently switched to pip for deployment.
+Frozen requirements contain the packages you specified, plus all their
+dependencies, with pinned versions.
 
-Basically it downloads packages from one or more pip 'normal' requirements
-files (the ones you use for development, containing only the 'top level'
-dependencies), and outputs the corresponding list of requirements to copy/paste
-in your frozen production requirements files.
+For example if you have ``requirements.txt`` containing this::
 
-It can also upload the packages to your private pypi repository, and even
-download the packages from there to save bandwidth.
+    pyramid
+    sqlalchemy
+
+The frozen version would be::
+
+    # This file has been automatically generated, DO NOT EDIT!
+
+    # Frozen requirements for "requirements.txt"
+
+    pastedeploy==1.5.2
+    pyramid==1.5.1
+    repoze.lru==0.6
+    setuptools==5.5.1
+    sqlalchemy==0.9.7
+    translationstring==1.1
+    venusian==1.0
+    webob==1.4
+    zope.deprecation==4.1.1
+    zope.interface==4.1.1
+
+Then you can use the frozen requirements in your deployment scripts with ``pip
+install -r requirements-frozen.txt --no-deps``, and enjoy consistent
+deployments even if some packages are updated on pypi.
+
+freeze-requirements can also put the downloaded source packages in a pypi-like
+directory structure on your web server, so you can speed up your deployments
+with ``pip install -r requirements-frozen.txt --index-url
+http://mywebserver.com/pypi-mirror``, and also build `wheels
+<http://pythonwheels.com/>` to speed up deployments even more.
 
 Installation
 ------------
 
 Install from pypi::
 
-    $ sudo pip install freeze-requirements
+    $ pip install freeze-requirements
 
 Or from source::
 
-    $ sudo ./setup.py install
-
-If you want to use ``--upload`` you also need fabric::
-
-    $ sudo pip install fabric
+    $ ./setup.py install
 
 Examples
 --------
 
-Download packages locally::
+Create a frozen versions of two requirements files (they will be named
+``requirements-frozen.txt`` and ``requirements2-frozen.txt`` in this example,
+the ``-frozen`` suffix can be customized with ``--separate-requirements-suffix``)::
 
-    freeze-requirements requirements.txt --output /tmp/packages
+    $ freeze-requirements freeze --separate-requirements requirements.txt requirements2.txt
 
-Process multiple requirements files at once::
+Merge multiple requirements in a single file::
 
-    freeze-requirements requirements.txt requirements2.txt --output /tmp/packages
+    $ freeze-requirements freeze --merged-requirements requirements-merged.txt requirements.txt requirements2.txt
 
-Download packages and upload them to a remote host::
+Use a cache to avoid reprocessing known requirements files::
 
-    freeze-requirements requirements.txt --upload user@private-pypi.example.com:/home/pypi/packages
+    $ freeze-requirements freeze --cache-dependencies requirements.txt
 
-Same as above but download packages from the remote host. This may be faster as
-there is no need to upload the packages from your machine and the remote host
-may have a faster internet connection (pip needs to be installed on the remote
-host)::
+Put downloaded source packages and build wheels for them in a pypi-like
+directory structure::
 
-    freeze-requirements requirements.txt --upload user@private-pypi.example.com:/home/pypi/packages --remote-pip
-    
+    $ freeze-requirements freeze --output-dir /path/to/my/pypi --build-wheels requirements.txt
+
