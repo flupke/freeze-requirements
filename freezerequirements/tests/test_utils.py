@@ -1,6 +1,12 @@
+import os.path as op
+
 from nose.tools import assert_equal
 
-from freezerequirements.utils import likely_distro, group_and_select_packages
+from freezerequirements.utils import (likely_distro, group_and_select_packages,
+        get_wheel_name)
+
+
+DATA_DIR = op.join(op.dirname(__file__), 'data')
 
 
 def test_likely_distro():
@@ -29,3 +35,12 @@ def test_group_and_select_packages():
             ('2014-01-29-16-44-48.878536', ['requirements3.txt']),
         ],
     })
+
+
+def test_get_wheel_name():
+    setuptools_package = op.join(DATA_DIR, 'simple-setuptools-0.0.0.tar.gz')
+    assert get_wheel_name(setuptools_package).endswith('.whl')
+    distutils_package = op.join(DATA_DIR, 'simple-distutils-0.0.0.tar.gz')
+    assert get_wheel_name(distutils_package).endswith('.whl')
+    distutils_package = op.join(DATA_DIR, 'simple-setuptools-0.0.0.zip')
+    assert get_wheel_name(distutils_package).endswith('.whl')

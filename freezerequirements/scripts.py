@@ -2,21 +2,17 @@ from __future__ import print_function
 
 import os
 import sys
-import atexit
 import os.path as op
 import tempfile
-import shutil
 import json
 import collections
 
 import sh
 import click
 
-from freezerequirements.utils import (likely_distro, cache_dir, cache_path,
-        group_and_select_packages, StringWithAttrs)
-
-
-TEMPFILES_PREFIX = 'freeze-requirements-'
+from .utils import (likely_distro, cache_dir, cache_path,
+        group_and_select_packages, StringWithAttrs, create_work_dir,
+        get_wheel_name, colored)
 
 
 @click.group()
@@ -49,6 +45,8 @@ def main():
         type=click.Path(dir_okay=False))
 @click.option('--build-wheels/--no-build-wheels', default=False,
         help='Build wheel packages from the requirements')
+@click.option('--rebuild-wheels/--no-rebuild-wheels', default=True,
+        help='Check for wheels in the output directory before rebuilding them')
 @click.option('--allow-external', 'pip_externals', multiple=True,
         metavar='PACKAGE')
 @click.option('--allow-all-external/--no-allow-all-external',
@@ -68,7 +66,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
-        separate_requirements_suffix):
+        separate_requirements_suffix, rebuild_wheels):
     '''
     Create a frozen requirement file from one or more requirement files.
     '''
@@ -90,8 +88,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     check_versions_conflicts = separate_requirements
 
     # Create packages collect dir
-    packages_collect_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
-    atexit.register(shutil.rmtree, packages_collect_dir)
+    packages_collect_dir = create_work_dir()
 
     if cache_dependencies:
         reqs_cache_dir = cache_dir()
@@ -133,7 +130,6 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 filtered_requirements_refs.append(filtered_reqs)
 
     # Download packages
-    print('Downloading packages...', file=sys.stderr)
     requirements_packages = []
     wheels = {}
     for requirement in requirements:
@@ -151,8 +147,8 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 continue
         print(original_requirement, file=sys.stderr)
         # Download python source packages from requirement file
-        temp_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
-        atexit.register(shutil.rmtree, temp_dir)
+        print('  Downloading packages...', file=sys.stderr)
+        temp_dir = create_work_dir()
         pip_args = ['--no-use-wheel']
         pip_kwargs = {'requirement': requirement, 'download': temp_dir}
         if pip_cache:
@@ -167,7 +163,11 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             pip_args += ['--allow-external', external]
         for insecure in pip_insecures:
             pip_args += ['--allow-insecure', insecure]
-        pip.install(*pip_args, **pip_kwargs)
+        try:
+            pip.install(*pip_args, **pip_kwargs)
+        except sh.ErrorReturnCode as exc:
+            print(exc.stdout, file=sys.stderr)
+            sys.exit(1)
         # List downloaded packages
         dependencies = os.listdir(temp_dir)
         requirements_packages.append((original_requirement, dependencies))
@@ -176,9 +176,22 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             print('  Building wheels...', file=sys.stderr)
             for package in dependencies:
                 package_path = op.join(temp_dir, package)
+                # Check the wheel does not already exist
+                if not rebuild_wheels:
+                    wheel_name = get_wheel_name(package_path)
+                    distro = likely_distro(package)
+                    final_wheel_path = op.join(output_dir, distro.key,
+                            wheel_name)
+                    if op.exists(final_wheel_path):
+                        print(colored('okgreen', '  %s already built, skipped' %
+                                final_wheel_path), file=sys.stderr)
+                        continue
+                    else:
+                        print(colored('okblue', '  %s not found, rebuilding' %
+                                final_wheel_path), file=sys.stderr)
+                # Nope, build wheel
                 final_path = op.join(packages_collect_dir, package)
-                wheel_dir = tempfile.mkdtemp(prefix=TEMPFILES_PREFIX)
-                atexit.register(shutil.rmtree, wheel_dir)
+                wheel_dir = create_work_dir()
                 pip.wheel('--no-deps', package_path, wheel_dir=wheel_dir)
                 wheels[final_path] = op.join(wheel_dir, os.listdir(wheel_dir)[0])
         # Update cache and move packages to the packages collect dir
@@ -200,7 +213,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             if not op.exists(dst_dir):
                 os.makedirs(dst_dir)
             move_forced(package, dst_dir)
-            if build_wheels:
+            if build_wheels and package in wheels:
                 move_forced(wheels[package], dst_dir)
         print(file=sys.stderr)
 

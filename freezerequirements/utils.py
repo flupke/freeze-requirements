@@ -1,12 +1,38 @@
+from __future__ import print_function
+
+import sys
+import shutil
+import atexit
 import os.path as op
 import string
 import hashlib
 import os
 import bisect
+import tempfile
 from collections import defaultdict
 from distutils.version import LooseVersion
+from itertools import takewhile
 
+import sh
 from setuptools.package_index import distros_for_filename
+
+from .archive import Archive
+
+
+CLI_COLORS = {
+    'header': 95,
+    'okblue': 94,
+    'okgreen': 92,
+    'warning': 93,
+    'fail': 91,
+}
+
+
+def colored(color, text):
+    '''
+    Add color to text.
+    '''
+    return '\033[%sm%s\033[0m' % (CLI_COLORS[color], text)
 
 
 def likely_distro(filename):
@@ -101,3 +127,56 @@ class StringWithAttrs(unicode):
     pass
 
 
+def create_work_dir():
+    '''
+    Create a temporary work directory, automatically cleaned at exit.
+    '''
+    path = tempfile.mkdtemp(prefix='freeze-requirements-')
+    atexit.register(shutil.rmtree, path)
+    return path
+
+
+def get_wheel_name(package_filename):
+    '''
+    Get wheel archive name from a source package filename.
+    '''
+    archive = Archive(package_filename)
+
+    # Extract package to a temp directory
+    temp_dir = create_work_dir()
+    archive.extract_all(temp_dir)
+
+    # Find where packages have been extracted
+    extracted_package_dir = commonprefix(
+            op.realpath(op.join(temp_dir, p)) for p in archive.get_names())
+
+    # chdir to the extracted package
+    prev_cwd = os.getcwd()
+    os.chdir(extracted_package_dir)
+
+    # Run setup.py wheel_name
+    python = sh.Command(sys.executable)
+    try:
+        # Hack borrowed from pip ensuring setup.py is executed with setuptools
+        output = python('-c',
+                "import setuptools;__file__='setup.py';"
+                "exec(compile(open(__file__).read().replace('\\r\\n', '\\n'), "
+                "__file__, 'exec'))", 'wheel_name')
+        return output.splitlines()[-1]
+    finally:
+        os.chdir(prev_cwd)
+
+
+def allnamesequal(name):
+    return all(n==name[0] for n in name[1:])
+
+
+def commonprefix(paths, sep=None):
+    '''
+    :func:`os.path.commonprefix` is buggy and can return non-existent paths.
+    This version works correctly.
+    '''
+    if sep is None:
+        sep = op.sep
+    bydirectorylevels = zip(*[p.split(sep) for p in paths])
+    return sep.join(x[0] for x in takewhile(allnamesequal, bydirectorylevels))
