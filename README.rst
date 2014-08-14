@@ -38,7 +38,7 @@ freeze-requirements can also put the downloaded source packages in a pypi-like
 directory structure on your web server, so you can speed up your deployments
 with ``pip install -r requirements-frozen.txt --index-url
 http://mywebserver.com/pypi-mirror``, and also build `wheels
-<http://pythonwheels.com/>` to speed up deployments even more.
+<http://pythonwheels.com/>`_ to speed up deployments even more.
 
 Installation
 ------------
