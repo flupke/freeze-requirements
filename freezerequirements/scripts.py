@@ -13,6 +13,7 @@ import click
 from .utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages, StringWithAttrs, create_work_dir,
         get_wheel_name, colored)
+from .exceptions import VersionsConflicts
 
 
 @click.group()
@@ -87,17 +88,10 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     excluded_packages.extend(ext_wheels)
     check_versions_conflicts = separate_requirements
 
-    # Create packages collect dir
-    packages_collect_dir = create_work_dir()
-
     if cache_dependencies:
         reqs_cache_dir = cache_dir()
         if not op.exists(reqs_cache_dir):
             os.makedirs(reqs_cache_dir)
-
-    # Prepare reused shell commands
-    pip = sh.Command(pip)
-    move_forced = sh.mv.bake('-f')
 
     # Filter excluded packages from requirements files
     filtered_requirements_refs = []
@@ -129,9 +123,61 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 # Keep a reference to tempfile to avoid garbage collection
                 filtered_requirements_refs.append(filtered_reqs)
 
+    while True:
+        try:
+            requirements_packages, grouped_packages = collect_packages(
+                    requirements, output_dir, cache_dependencies, build_wheels,
+                    rebuild_wheels, pip, pip_cache, use_mirrors,
+                    pip_allow_all_external, pip_externals, pip_insecures,
+                    check_versions_conflicts)
+        except VersionsConflicts as exc:
+            if not exc.cached_reqs_paths:
+                sys.exit(1)
+            print('Trying to automatically resolve conflicts by reprocessing '
+                    'cached dependencies', file=sys.stderr)
+            for path in exc.cached_reqs_paths:
+                os.unlink(path)
+
+    # Format merged requirements
+    if merged_requirements:
+        format_requirements(merged_requirements, requirements_packages,
+                grouped_packages, excluded_packages, output_index_url,
+                ext_wheels_lines)
+        print('Wrote merged frozen requirements in %s' %
+                merged_requirements.name, file=sys.stderr)
+
+    # Format separate requirements
+    if separate_requirements:
+        for requirements_file, packages in requirements_packages:
+            root, ext = op.splitext(requirements_file)
+            filename = root + separate_requirements_suffix + ext
+            with open(filename, 'w') as fp:
+                format_requirements(fp, [(requirements_file, packages)],
+                grouped_packages, excluded_packages, output_index_url,
+                ext_wheels_lines)
+            print('Wrote separate frozen requirements for %s in %s' %
+                    (requirements_file, filename), file=sys.stderr)
+
+
+def collect_packages(requirements, output_dir, cache_dependencies,
+        build_wheels, rebuild_wheels, pip_bin, pip_cache, use_mirrors,
+        pip_allow_all_external, pip_externals, pip_insecures,
+        check_versions_conflicts):
+    '''
+    Collect all packages and their requirements to *output_dir*, optionally
+    build wheel files in the process.
+    '''
+    # Create packages collect dir
+    packages_collect_dir = create_work_dir()
+
+    # Prepare reused shell commands
+    pip = sh.Command(pip_bin)
+    move_forced = sh.mv.bake('-f')
+
     # Download packages
     requirements_packages = []
     wheels = {}
+    deps_cache_paths = []
     for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
@@ -139,6 +185,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         if cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
+                deps_cache_paths.append(deps_cache_path)
                 print('%s dependencies found in cache' % original_requirement,
                         file=sys.stderr)
                 with open(deps_cache_path) as fp:
@@ -231,27 +278,9 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         if errors:
             print('Found versions conflicts:', file=sys.stderr)
             print('\n'.join(errors), file=sys.stderr)
-            sys.exit(1)
+            raise VersionsConflicts(deps_cache_paths)
 
-    # Format merged requirements
-    if merged_requirements:
-        format_requirements(merged_requirements, requirements_packages,
-                grouped_packages, excluded_packages, output_index_url,
-                ext_wheels_lines)
-        print('Wrote merged frozen requirements in %s' %
-                merged_requirements.name, file=sys.stderr)
-
-    # Format separate requirements
-    if separate_requirements:
-        for requirements_file, packages in requirements_packages:
-            root, ext = op.splitext(requirements_file)
-            filename = root + separate_requirements_suffix + ext
-            with open(filename, 'w') as fp:
-                format_requirements(fp, [(requirements_file, packages)],
-                grouped_packages, excluded_packages, output_index_url,
-                ext_wheels_lines)
-            print('Wrote separate frozen requirements for %s in %s' %
-                    (requirements_file, filename), file=sys.stderr)
+    return requirements_packages, grouped_packages
 
 
 def format_requirements(fp, packages_groups, grouped_packages,
