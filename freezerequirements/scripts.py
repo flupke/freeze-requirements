@@ -177,7 +177,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
     # Download packages
     requirements_packages = []
     wheels = {}
-    deps_cache_paths = []
+    deps_cache_map = collections.defaultdict(set)
     for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
@@ -185,12 +185,18 @@ def collect_packages(requirements, output_dir, cache_dependencies,
         if cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
-                deps_cache_paths.append(deps_cache_path)
                 print('%s dependencies found in cache' % original_requirement,
                         file=sys.stderr)
                 with open(deps_cache_path) as fp:
-                    requirements_packages.append((original_requirement,
-                        json.load(fp)))
+                    dependencies = json.load(fp)
+                requirements_packages.append((original_requirement,
+                    dependencies))
+                # Store dependencies cache path for each distro name in it, so
+                # we can retrieve cache files associated with version conflicts
+                # later
+                for pkg_filename in dependencies:
+                    pkg_name = likely_distro(pkg_filename)
+                    deps_cache_map[pkg_name].add(deps_cache_path)
                 continue
         print(original_requirement, file=sys.stderr)
         # Download python source packages from requirement file
@@ -268,6 +274,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
     grouped_packages = group_and_select_packages(requirements_packages)
     if check_versions_conflicts:
         errors = []
+        deps_cache_paths = set()
         for distro, versions in grouped_packages.items():
             if len(versions) > 1:
                 lines = ['  - %s:' % distro]
@@ -275,6 +282,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                         (distro, version, ', '.join(requirements))
                         for version, requirements in versions)
                 errors.append('\n'.join(lines))
+                deps_cache_paths.update(deps_cache_map[distro])
         if errors:
             print('Found versions conflicts:', file=sys.stderr)
             print('\n'.join(errors), file=sys.stderr)
