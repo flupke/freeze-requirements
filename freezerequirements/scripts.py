@@ -131,12 +131,14 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                     pip_allow_all_external, pip_externals, pip_insecures,
                     check_versions_conflicts)
         except VersionsConflicts as exc:
-            if not exc.cached_reqs_paths:
+            if not exc.reqs_cache_paths:
                 sys.exit(1)
             print('Trying to automatically resolve conflicts by reprocessing '
                     'cached dependencies', file=sys.stderr)
-            for path in exc.cached_reqs_paths:
+            for path in exc.reqs_cache_paths:
                 os.unlink(path)
+        else:
+            break
 
     # Format merged requirements
     if merged_requirements:
@@ -195,7 +197,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                 # we can retrieve cache files associated with version conflicts
                 # later
                 for pkg_filename in dependencies:
-                    pkg_name = likely_distro(pkg_filename)
+                    pkg_name = likely_distro(pkg_filename).key
                     deps_cache_map[pkg_name].add(deps_cache_path)
                 continue
         print(original_requirement, file=sys.stderr)
