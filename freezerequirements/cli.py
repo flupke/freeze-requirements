@@ -21,6 +21,8 @@ def main():
     '''
     A tool to freeze pip requirements files.
     '''
+    # Disable sh truncation of errors
+    sh.ErrorReturnCode.truncate_cap = None
 
 
 @click.command()
@@ -33,7 +35,7 @@ def main():
 @click.option('--separate-requirements/--no-separate-requirements',
         default=False, help='Create separate frozen requirements next to each '
         'input requirements file')
-@click.option('--separate-requirements-suffix', default='-frozen', 
+@click.option('--separate-requirements-suffix', default='-frozen',
         help='suffix to insert before file extensions to create separate '
         'frozen requirements filenames')
 @click.option('-c', '--pip-cache', help='Pip download cache', metavar='DIR')
