@@ -12,7 +12,7 @@ import click
 
 from .utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages, StringWithAttrs, create_work_dir,
-        get_wheel_name, colored)
+        get_wheel_name, colored, build_wheel)
 from .exceptions import VersionsConflicts
 
 
@@ -248,9 +248,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                                 final_wheel_path), file=sys.stderr)
                 # Nope, build wheel
                 final_path = op.join(packages_collect_dir, package)
-                wheel_dir = create_work_dir()
-                pip.wheel('--no-deps', package_path, wheel_dir=wheel_dir)
-                wheels[final_path] = op.join(wheel_dir, os.listdir(wheel_dir)[0])
+                wheels[final_path] = build_wheel(pip, package_path)
         # Update cache and move packages to the packages collect dir
         if cache_dependencies:
             with open(deps_cache_path, 'w') as fp:

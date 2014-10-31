@@ -12,6 +12,7 @@ import tempfile
 from collections import defaultdict
 from distutils.version import LooseVersion
 from itertools import takewhile
+import glob
 
 import sh
 from setuptools.package_index import distros_for_filename
@@ -26,6 +27,22 @@ CLI_COLORS = {
     'warning': 93,
     'fail': 91,
 }
+
+
+class cd(object):
+    '''
+    A context manager that changes the current working directory.
+    '''
+
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
+        self.prev_cwd = os.getcwd()
+        os.chdir(self.path)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.chdir(self.prev_cwd)
 
 
 def colored(color, text):
@@ -136,6 +153,19 @@ def create_work_dir():
     return path
 
 
+def run_setup_with_setuptools(*commands):
+    '''
+    Run setup.py in the current directory, ensuring setuptools is activated.
+
+    Return command stdout.
+    '''
+    python = sh.Command(sys.executable)
+    return python('-c',
+            "import setuptools;__file__='setup.py';"
+            "exec(compile(open(__file__).read().replace('\\r\\n', '\\n'), "
+            "__file__, 'exec'))", *commands)
+
+
 def get_wheel_name(package_filename):
     '''
     Get wheel archive name from a source package filename.
@@ -150,21 +180,10 @@ def get_wheel_name(package_filename):
     extracted_package_dir = commonprefix(
             op.realpath(op.join(temp_dir, p)) for p in archive.get_names())
 
-    # chdir to the extracted package
-    prev_cwd = os.getcwd()
-    os.chdir(extracted_package_dir)
-
     # Run setup.py wheel_name
-    python = sh.Command(sys.executable)
-    try:
-        # Hack borrowed from pip ensuring setup.py is executed with setuptools
-        output = python('-c',
-                "import setuptools;__file__='setup.py';"
-                "exec(compile(open(__file__).read().replace('\\r\\n', '\\n'), "
-                "__file__, 'exec'))", 'wheel_name')
-        return output.splitlines()[-1]
-    finally:
-        os.chdir(prev_cwd)
+    with cd(extracted_package_dir):
+        output = run_setup_with_setuptools('wheel_name')
+    return output.splitlines()[-1]
 
 
 def allnamesequal(name):
@@ -180,3 +199,36 @@ def commonprefix(paths, sep=None):
         sep = op.sep
     bydirectorylevels = zip(*[p.split(sep) for p in paths])
     return sep.join(x[0] for x in takewhile(allnamesequal, bydirectorylevels))
+
+
+def build_wheel(pip, source_archive):
+    '''
+    Build a wheel package from source_archive, in a temp directory.
+
+    Return the wheel package filename.
+    '''
+    wheel_dir = create_work_dir()
+    pip.wheel('--no-deps', source_archive, wheel_dir=wheel_dir)
+
+    # "pip wheel" fails on unittest2 because they use a stupid custom class
+    # instead of a string for the version number in setup.py; pip does not set
+    # a non-zero return code in this case, the error is just printed and no
+    # wheel is built, so we have to check if the wheel dir is empty.
+    #
+    # The workaround is to run "setup.py sdist bdist_wheel", sdist converts the
+    # version to string somewhere in the process...
+    wheel_dir_content = os.listdir(wheel_dir)
+    if wheel_dir_content:
+        return op.join(wheel_dir, wheel_dir_content[0])
+
+    # Engage WTF mode
+    build_dir = create_work_dir()
+    archive = Archive(source_archive)
+    archive.extract_all(build_dir)
+    source_dir = commonprefix(
+        op.realpath(op.join(build_dir, p)) for p in archive.get_names())
+    with cd(source_dir):
+        run_setup_with_setuptools('sdist', 'bdist_wheel')
+    dist_dir = op.join(source_dir, 'dist')
+    wheel_filename = glob.glob(op.join(dist_dir, '*.whl'))
+    return wheel_filename[0]
