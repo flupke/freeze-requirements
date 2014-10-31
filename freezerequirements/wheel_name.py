@@ -17,6 +17,11 @@ class wheel_name(Command):
         pass
 
     def run(self):
+        # Workaround a very WTF bug if version defined in setup.py is not a
+        # string (seen in unittest2)
+        if not isinstance(self.distribution.metadata.version, basestring):
+            self.distribution.metadata.version = str(self.distribution.metadata.version)
+
         bdist_wheel_obj = bdist_wheel(self.distribution)
         bdist_wheel_obj.ensure_finalized()
         archive_basename = bdist_wheel_obj.get_archive_basename()

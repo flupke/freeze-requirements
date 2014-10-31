@@ -6,6 +6,18 @@
 News
 ====
 
+0.4.4
+-----
+
+Added workarounds for packages with non-string versions in their setup.py
+(bugs were caused by unittest2 0.7.1, see
+https://code.google.com/p/unittest-ext/issues/detail?id=84).
+
+0.4.3
+-----
+
+Added automatic conflicts resolution.
+
 0.4.2
 -----
 
