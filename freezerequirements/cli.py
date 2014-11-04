@@ -57,8 +57,12 @@ def main():
 @click.option('--allow-insecure', 'pip_insecures', multiple=True,
         metavar='PACKAGE')
 @click.option('-x', '--exclude', 'excluded_packages', multiple=True,
-        help='Exclude a package from the frozen requirements',
-        metavar='PACKAGE')
+        help='Exclude a package from the frozen requirements; you may specify '
+        '--exclude multiple times', metavar='PACKAGE')
+@click.option('--exclude-requirements', type=click.File(mode='r'),
+        multiple=True, help='Exclude packages contained in requirements FILE; '
+        'you may specify --exclude-requirements multiple times',
+        metavar='FILE')
 @click.option('--use-ext-wheel', 'ext_wheels', multiple=True,
         help='Do not try to build wheel for PACKAGE, but still include it in '
         'the frozen output; use --use-ext-wheel multiple times to specify '
@@ -69,7 +73,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
-        separate_requirements_suffix, rebuild_wheels):
+        separate_requirements_suffix, rebuild_wheels, exclude_requirements):
     '''
     Create a frozen requirement file from one or more requirement files.
     '''
@@ -88,6 +92,13 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     excluded_packages = list(excluded_packages)
     requirements = list(requirements)
     excluded_packages.extend(ext_wheels)
+    for excluded_reqs_fp in exclude_requirements:
+        excluded_packages.extend(p.strip()
+                for p in excluded_reqs_fp
+                if p.strip() and not p.strip().startswith('#'))
+    for line in exclude_requirements:
+        pkg = line.strip()
+
     check_versions_conflicts = separate_requirements
 
     if cache_dependencies:
