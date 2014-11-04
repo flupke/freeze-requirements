@@ -105,7 +105,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     requirements = list(requirements)
     excluded_packages.extend(ext_wheels)
     for excluded_reqs_fp in exclude_requirements:
-        excluded_packages.extend(p.strip()
+        excluded_packages.extend(dist_name(p.strip())
                 for p in excluded_reqs_fp
                 if p.strip() and not p.strip().startswith('#'))
 
@@ -127,7 +127,6 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 for line in fp:
                     excluded_package = False
                     for pkg in excluded_packages:
-                        pkg = dist_name(pkg)
                         if pkg == dist_name(line):
                             excluded_package = True
                             excluded_something = True
