@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import re
 import os
 import sys
 import os.path as op
@@ -14,6 +15,17 @@ from .utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages, StringWithAttrs, create_work_dir,
         get_wheel_name, colored, build_wheel)
 from .exceptions import VersionsConflicts
+
+dist_re = re.compile(r"^(\w[\s\w'.-]*)(\((.*)\))?")
+
+
+def dist_name(x):
+    m = dist_re.match(x)
+    if not m:
+        return ''
+    groups = m.groups('')
+    return groups[0].strip().lower()
+
 
 
 @click.group()
@@ -113,9 +125,11 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             filtered_lines = []
             with open(requirement) as fp:
                 for line in fp:
+                    line = dist_name(line)
                     excluded_package = False
                     for pkg in excluded_packages:
-                        if pkg in line:
+                        pkg = dist_name(pkg)
+                        if pkg == line:
                             excluded_package = True
                             excluded_something = True
                             if pkg in ext_wheels:
