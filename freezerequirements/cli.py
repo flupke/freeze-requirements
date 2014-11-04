@@ -96,8 +96,6 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         excluded_packages.extend(p.strip()
                 for p in excluded_reqs_fp
                 if p.strip() and not p.strip().startswith('#'))
-    for line in exclude_requirements:
-        pkg = line.strip()
 
     check_versions_conflicts = separate_requirements
 
