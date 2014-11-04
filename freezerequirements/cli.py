@@ -125,11 +125,10 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             filtered_lines = []
             with open(requirement) as fp:
                 for line in fp:
-                    line = dist_name(line)
                     excluded_package = False
                     for pkg in excluded_packages:
                         pkg = dist_name(pkg)
-                        if pkg == line:
+                        if pkg == dist_name(line):
                             excluded_package = True
                             excluded_something = True
                             if pkg in ext_wheels:
