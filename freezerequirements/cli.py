@@ -69,11 +69,19 @@ def main():
         'multiple packages', metavar='PACKAGE')
 @click.option('--output-index-url', help='Add an --index-url in the generated '
         'requirements file', metavar='URL')
+@click.option('--loose', 'loose_packages', multiple=True, metavar='PACKAGE',
+        help='Do not specify version for PACKAGE in the output requirements '
+        'file(s)')
+@click.option('--loose-requirements/--no-loose-requirements', default=False,
+        help='Generate loose requirements files')
+@click.option('--loose-requirements-suffix', default='-loose', metavar='SUFFIX',
+        help='Loose requirements filenames are generated with this suffix')
 def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
-        separate_requirements_suffix, rebuild_wheels, exclude_requirements):
+        separate_requirements_suffix, rebuild_wheels, exclude_requirements,
+        loose_packages, loose_requirements, loose_requirements_suffix):
     '''
     Create a frozen requirement file from one or more requirement files.
     '''
@@ -96,6 +104,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         excluded_packages.extend(p.strip()
                 for p in excluded_reqs_fp
                 if p.strip() and not p.strip().startswith('#'))
+    loose_packages = set(loose_packages)
 
     check_versions_conflicts = separate_requirements
 
@@ -166,9 +175,21 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             filename = root + separate_requirements_suffix + ext
             with open(filename, 'w') as fp:
                 format_requirements(fp, [(requirements_file, packages)],
-                grouped_packages, excluded_packages, output_index_url,
-                ext_wheels_lines)
+                        grouped_packages, excluded_packages, output_index_url,
+                        ext_wheels_lines)
             print('Wrote separate frozen requirements for %s in %s' %
+                    (requirements_file, filename), file=sys.stderr)
+
+    # Format loose requirements
+    if loose_requirements and loose_packages:
+        for requirements_file, packages in requirements_packages:
+            root, ext = op.splitext(requirements_file)
+            filename = root + loose_requirements_suffix + ext
+            with open(filename, 'w') as fp:
+                format_requirements(fp, [(requirements_file, packages)],
+                        grouped_packages, excluded_packages, output_index_url,
+                        ext_wheels_lines, loose_packages=loose_packages)
+            print('Wrote separate loose requirements for %s in %s' %
                     (requirements_file, filename), file=sys.stderr)
 
 
@@ -303,7 +324,8 @@ def collect_packages(requirements, output_dir, cache_dependencies,
 
 
 def format_requirements(fp, packages_groups, grouped_packages,
-        excluded_packages, output_index_url, ext_wheels_lines):
+        excluded_packages, output_index_url, ext_wheels_lines,
+        loose_packages=set()):
     '''
     Format the *(requirements_file, packages_list)* list *packages_groups* to
     *fp*.
@@ -323,7 +345,11 @@ def format_requirements(fp, packages_groups, grouped_packages,
                 continue
             seen.add(distro.key)
             versions = grouped_packages[distro.key]
-            fp.write('%s==%s\n' % (distro.key, versions[-1][0]))
+            if distro.key not in loose_packages:
+                line = '%s==%s' % (distro.key, versions[-1][0])
+            else:
+                line = distro.key
+            fp.write('%s\n' % line)
         for pkg in ext_wheels_lines[requirements_file]:
             fp.write('%s\n' % pkg.strip())
         fp.write('\n')
