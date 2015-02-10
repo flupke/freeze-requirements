@@ -351,7 +351,11 @@ def format_requirements(fp, packages_groups, grouped_packages,
                 line = distro.key
             fp.write('%s\n' % line)
         for pkg in ext_wheels_lines[requirements_file]:
-            fp.write('%s\n' % pkg.strip())
+            distro = likely_distro(pkg)
+            if distro.key in loose_packages:
+                fp.write('%s\n' % distro.key)
+            else:
+                fp.write('%s\n' % pkg.strip())
         fp.write('\n')
 
 
