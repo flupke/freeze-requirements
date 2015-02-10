@@ -9,6 +9,7 @@ import collections
 
 import sh
 import click
+from pip.req import InstallRequirement
 
 from .utils import (likely_distro, cache_dir, cache_path,
         group_and_select_packages, StringWithAttrs, create_work_dir,
@@ -350,8 +351,12 @@ def format_requirements(fp, packages_groups, grouped_packages,
             else:
                 line = distro.key
             fp.write('%s\n' % line)
-        for pkg in ext_wheels_lines[requirements_file]:
-            fp.write('%s\n' % pkg.strip())
+        for line in ext_wheels_lines[requirements_file]:
+            req = InstallRequirement.from_line(line)
+            if req.name in loose_packages:
+                fp.write('%s\n' % req.name)
+            else:
+                fp.write('%s\n' % line.strip())
         fp.write('\n')
 
 
