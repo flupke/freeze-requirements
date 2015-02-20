@@ -213,6 +213,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
     requirements_packages = []
     wheels = {}
     deps_cache_map = collections.defaultdict(set)
+    cache_updates = {}
     for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
@@ -280,10 +281,10 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                 # Nope, build wheel
                 final_path = op.join(packages_collect_dir, package)
                 wheels[final_path] = build_wheel(pip, package_path)
-        # Update cache and move packages to the packages collect dir
+        # Save cache content for later and move packages to the packages
+        # collect dir
         if cache_dependencies:
-            with open(deps_cache_path, 'w') as fp:
-                json.dump(dependencies, fp)
+            cache_updates[deps_cache_path] = json.dumps(dependencies)
         move_forced(sh.glob(op.join(temp_dir, '*')), packages_collect_dir)
     print(file=sys.stderr)
 
@@ -302,6 +303,11 @@ def collect_packages(requirements, output_dir, cache_dependencies,
             if build_wheels and package in wheels:
                 move_forced(wheels[package], dst_dir)
         print(file=sys.stderr)
+
+    # Commit cache
+    for filename, contents in cache_updates.items():
+        with open(filename, 'w') as fp:
+            fp.write(contents)
 
     # Group packages by distribution key and sort them by version
     grouped_packages = group_and_select_packages(requirements_packages)
