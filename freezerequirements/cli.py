@@ -77,12 +77,14 @@ def main():
         help='Generate loose requirements files')
 @click.option('--loose-requirements-suffix', default='-loose', metavar='SUFFIX',
         help='Loose requirements filenames are generated with this suffix')
+@click.option('--max-conflict-resolution-iterations', default=10)
 def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
         separate_requirements_suffix, rebuild_wheels, exclude_requirements,
-        loose_packages, loose_requirements, loose_requirements_suffix):
+        loose_packages, loose_requirements, loose_requirements_suffix,
+        max_conflict_resolution_iterations):
     '''
     Create a frozen requirement file from one or more requirement files.
     '''
@@ -144,7 +146,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 # Keep a reference to tempfile to avoid garbage collection
                 filtered_requirements_refs.append(filtered_reqs)
 
-    while True:
+    for _ in range(max_conflict_resolution_iterations):
         try:
             requirements_packages, grouped_packages = collect_packages(
                     requirements, output_dir, cache_dependencies, build_wheels,
@@ -160,6 +162,10 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 os.unlink(path)
         else:
             break
+    else:
+        print('Failed to resolve conflicts after %s retries' %
+                max_conflict_resolution_iterations, file=sys.stderr)
+        sys.exit(1)
 
     # Format merged requirements
     if merged_requirements:
@@ -213,6 +219,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
     requirements_packages = []
     wheels = {}
     deps_cache_map = collections.defaultdict(set)
+    cache_updates = {}
     for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
@@ -280,10 +287,10 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                 # Nope, build wheel
                 final_path = op.join(packages_collect_dir, package)
                 wheels[final_path] = build_wheel(pip, package_path)
-        # Update cache and move packages to the packages collect dir
+        # Save cache content for later and move packages to the packages
+        # collect dir
         if cache_dependencies:
-            with open(deps_cache_path, 'w') as fp:
-                json.dump(dependencies, fp)
+            cache_updates[deps_cache_path] = json.dumps(dependencies)
         move_forced(sh.glob(op.join(temp_dir, '*')), packages_collect_dir)
     print(file=sys.stderr)
 
@@ -302,6 +309,11 @@ def collect_packages(requirements, output_dir, cache_dependencies,
             if build_wheels and package in wheels:
                 move_forced(wheels[package], dst_dir)
         print(file=sys.stderr)
+
+    # Commit cache
+    for filename, contents in cache_updates.items():
+        with open(filename, 'w') as fp:
+            fp.write(contents)
 
     # Group packages by distribution key and sort them by version
     grouped_packages = group_and_select_packages(requirements_packages)
