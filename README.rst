@@ -68,7 +68,7 @@ Use a cache to avoid reprocessing known requirements files::
 
     $ freeze-requirements freeze --cache-dependencies requirements.txt
 
-Put downloaded source packages and build wheels for them in a pypi-like
+Download source packages and build wheels for them, putting them in a pypi-like
 directory structure::
 
     $ freeze-requirements freeze --output-dir /path/to/my/pypi --build-wheels requirements.txt
