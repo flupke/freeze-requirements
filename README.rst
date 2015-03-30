@@ -54,7 +54,7 @@ Or from source::
 Examples
 --------
 
-Create a frozen versions of two requirements files (they will be named
+Create frozen versions of two requirements files (they will be named
 ``requirements-frozen.txt`` and ``requirements2-frozen.txt`` in this example,
 the ``-frozen`` suffix can be customized with ``--separate-requirements-suffix``)::
 
