@@ -208,7 +208,13 @@ def build_wheel(pip, source_archive):
     Return the wheel package filename.
     '''
     wheel_dir = create_work_dir()
-    pip.wheel('--no-deps', source_archive, wheel_dir=wheel_dir)
+
+    # On newer versions of pip, we get a traceback when running "pip wheel" on
+    # unittest2, we need to ignore the error to trigger the workaround below.
+    try:
+        pip.wheel('--no-deps', source_archive, wheel_dir=wheel_dir)
+    except sh.ErrorReturnCode:
+        pass
 
     # "pip wheel" fails on unittest2 because they use a stupid custom class
     # instead of a string for the version number in setup.py; pip does not set
