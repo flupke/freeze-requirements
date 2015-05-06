@@ -59,7 +59,9 @@ def main():
         metavar='PACKAGE')
 @click.option('-x', '--exclude', 'excluded_packages', multiple=True,
         help='Exclude a package from the frozen requirements; you may specify '
-        '--exclude multiple times', metavar='PACKAGE')
+        '--exclude multiple times; PACKAGE may also take the form '
+        '[req_path]:[package_name], to exclude a package from a specific '
+        'separate requirement', metavar='PACKAGE')
 @click.option('--exclude-requirements', type=click.File(mode='r'),
         multiple=True, help='Exclude packages contained in requirements FILE; '
         'you may specify --exclude-requirements multiple times',
@@ -339,10 +341,6 @@ def collect_packages(requirements, output_dir, cache_dependencies,
 def format_requirements(fp, packages_groups, grouped_packages,
         excluded_packages, output_index_url, ext_wheels_lines,
         loose_packages=set()):
-    '''
-    Format the *(requirements_file, packages_list)* list *packages_groups* to
-    *fp*.
-    '''
     fp.write('# This file has been automatically generated, DO NOT EDIT!\n')
     fp.write('\n')
     if output_index_url:
@@ -354,7 +352,9 @@ def format_requirements(fp, packages_groups, grouped_packages,
         fp.write('\n')
         distros = [likely_distro(p) for p in packages]
         for distro in sorted(distros, key=lambda d: d.key):
-            if distro.key in seen or distro.key in excluded_packages:
+            if (distro.key in seen or
+                    distro.key in excluded_packages or
+                    '%s:%s' % (requirements_file, distro.key) in excluded_packages):
                 continue
             seen.add(distro.key)
             versions = grouped_packages[distro.key]
