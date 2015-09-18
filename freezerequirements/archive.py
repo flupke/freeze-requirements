@@ -12,6 +12,7 @@ class Archive(object):
         valid_exts = [
             ('.tar.gz', tarfile.open, 'getnames'),
             ('.zip', zipfile.ZipFile, 'namelist'),
+            ('.tar.bz2', tarfile.open, 'getnames'),
         ]
         for ext, self.opener, self.get_names_func_name in valid_exts:
             if filename.endswith(ext):
