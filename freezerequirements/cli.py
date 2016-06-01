@@ -39,9 +39,6 @@ def main():
 @click.option('--separate-requirements-suffix', default='-frozen',
         help='suffix to insert before file extensions to create separate '
         'frozen requirements filenames')
-@click.option('-c', '--pip-cache', help='Pip download cache', metavar='DIR')
-@click.option('--use-mirrors/--no-use-mirrors', default=False,
-        help='use pypi mirrors')
 @click.option('--cache-dependencies/--no-cache-dependencies', default=False,
         help='Use a cache to speed up processing of unchanged requirements '
         'files')
@@ -51,12 +48,6 @@ def main():
         help='Build wheel packages from the requirements')
 @click.option('--rebuild-wheels/--no-rebuild-wheels', default=True,
         help='Check for wheels in the output directory before rebuilding them')
-@click.option('--allow-external', 'pip_externals', multiple=True,
-        metavar='PACKAGE')
-@click.option('--allow-all-external/--no-allow-all-external',
-        'pip_allow_all_external', default=False)
-@click.option('--allow-insecure', 'pip_insecures', multiple=True,
-        metavar='PACKAGE')
 @click.option('-x', '--exclude', 'excluded_packages', multiple=True,
         help='Exclude a package from the frozen requirements; you may specify '
         '--exclude multiple times; PACKAGE may also take the form '
@@ -80,9 +71,9 @@ def main():
 @click.option('--loose-requirements-suffix', default='-loose', metavar='SUFFIX',
         help='Loose requirements filenames are generated with this suffix')
 @click.option('--max-conflict-resolution-iterations', default=10)
-def freeze(requirements, output_dir, pip_cache, cache_dependencies,
-        use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
-        pip_insecures, excluded_packages, ext_wheels, output_index_url,
+def freeze(requirements, output_dir, cache_dependencies,
+        pip, build_wheels,
+        excluded_packages, ext_wheels, output_index_url,
         merged_requirements, separate_requirements,
         separate_requirements_suffix, rebuild_wheels, exclude_requirements,
         loose_packages, loose_requirements, loose_requirements_suffix,
@@ -152,9 +143,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         try:
             requirements_packages, grouped_packages = collect_packages(
                     requirements, output_dir, cache_dependencies, build_wheels,
-                    rebuild_wheels, pip, pip_cache, use_mirrors,
-                    pip_allow_all_external, pip_externals, pip_insecures,
-                    check_versions_conflicts)
+                    rebuild_wheels, pip, check_versions_conflicts)
         except VersionsConflicts as exc:
             if not exc.reqs_cache_paths:
                 sys.exit(1)
@@ -203,9 +192,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
 
 
 def collect_packages(requirements, output_dir, cache_dependencies,
-        build_wheels, rebuild_wheels, pip_bin, pip_cache, use_mirrors,
-        pip_allow_all_external, pip_externals, pip_insecures,
-        check_versions_conflicts):
+        build_wheels, rebuild_wheels, pip_bin, check_versions_conflicts):
     '''
     Collect all packages and their requirements to *output_dir*, optionally
     build wheel files in the process.
@@ -246,22 +233,9 @@ def collect_packages(requirements, output_dir, cache_dependencies,
         # Download python source packages from requirement file
         print('  Downloading packages...', file=sys.stderr)
         temp_dir = create_work_dir()
-        pip_args = ['--no-use-wheel']
-        pip_kwargs = {'requirement': requirement, 'download': temp_dir}
-        if pip_cache:
-            if not op.exists(pip_cache):
-                os.makedirs(pip_cache)
-            pip_kwargs['download_cache'] = pip_cache
-        if use_mirrors:
-            pip_args.append('--use-mirrors')
-        if pip_allow_all_external:
-            pip_args.append('--allow-all-external')
-        for external in pip_externals:
-            pip_args += ['--allow-external', external]
-        for insecure in pip_insecures:
-            pip_args += ['--allow-insecure', insecure]
         try:
-            pip.install(*pip_args, **pip_kwargs)
+            pip.download(requirement=requirement, dest=temp_dir,
+                         no_binary=':all:')
         except sh.ErrorReturnCode as exc:
             print(exc.stdout, file=sys.stderr)
             print(exc.stderr, file=sys.stderr)
