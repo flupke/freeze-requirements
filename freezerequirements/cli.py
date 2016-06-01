@@ -264,6 +264,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
             pip.install(*pip_args, **pip_kwargs)
         except sh.ErrorReturnCode as exc:
             print(exc.stdout, file=sys.stderr)
+            print(exc.stderr, file=sys.stderr)
             sys.exit(1)
         # List downloaded packages
         dependencies = os.listdir(temp_dir)
