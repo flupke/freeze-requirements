@@ -15,12 +15,12 @@ install_requires = [
 ]
 
 
-setup(name='freeze-requirements',
+setup(
+    name='freeze-requirements',
     version=version,
-    description="A script to help creating and maintaining frozen requirements for pip",
+    description="A script to help creating and maintaining frozen requirements for pip",  # NOQA
     long_description=README + '\n\n' + NEWS,
     classifiers=[
-        # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
         'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX',
         'Intended Audience :: Developers',

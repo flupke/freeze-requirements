@@ -58,8 +58,7 @@ def likely_distro(filename):
     version that starts with a number.
     '''
     distros = [d for d in distros_for_filename(filename)
-            if d.version
-            and d.version[0] in string.digits]
+               if d.version and d.version[0] in string.digits]
     if len(distros) < 1:
         raise ValueError("can't find distro for %s" % filename)
     return distros[0]
@@ -117,8 +116,9 @@ def group_and_select_packages(packages_groups):
     highest version.
     '''
     # Create a dict with sorted versions
-    create_entry = lambda: {'versions': [], 'reqs_files': defaultdict(list)}
-    grouped_packages = defaultdict(create_entry)
+    grouped_packages = defaultdict(
+        lambda: {'versions': [], 'reqs_files': defaultdict(list)}
+    )
     for reqs_file, packages in packages_groups:
         for package in packages:
             distro = likely_distro(package)
@@ -160,10 +160,13 @@ def run_setup_with_setuptools(*commands):
     Return command stdout.
     '''
     python = sh.Command(sys.executable)
-    return python('-c',
-            "import setuptools;__file__='setup.py';"
-            "exec(compile(open(__file__).read().replace('\\r\\n', '\\n'), "
-            "__file__, 'exec'))", *commands)
+    return python(
+        '-c',
+        "import setuptools;__file__='setup.py';"
+        "exec(compile(open(__file__).read().replace('\\r\\n', '\\n'), "
+        "__file__, 'exec'))",
+        *commands
+    )
 
 
 def get_wheel_name(package_filename):
@@ -178,7 +181,8 @@ def get_wheel_name(package_filename):
 
     # Find where packages have been extracted
     extracted_package_dir = commonprefix(
-            op.realpath(op.join(temp_dir, p)) for p in archive.get_names())
+        op.realpath(op.join(temp_dir, p)) for p in archive.get_names()
+    )
 
     # Run setup.py wheel_name
     with cd(extracted_package_dir):
@@ -187,7 +191,7 @@ def get_wheel_name(package_filename):
 
 
 def allnamesequal(name):
-    return all(n==name[0] for n in name[1:])
+    return all(n == name[0] for n in name[1:])
 
 
 def commonprefix(paths, sep=None):
