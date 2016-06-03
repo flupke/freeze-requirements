@@ -246,6 +246,7 @@ def build_wheel(pip, source_archive):
     return wheel_filename[0]
 
 
-def canonicalize_name(name):
+def canonicalize_distro_name(name):
+    # Copied from packaging.utils
     # This is taken from PEP 503.
     return _canonicalize_regex.sub("-", name).lower()
