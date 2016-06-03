@@ -10,11 +10,11 @@ import collections
 import sh
 import click
 from pip.req import InstallRequirement
-from pip._vendor.packaging.utils import canonicalize_name
 
 from .utils import (likely_distro, cache_dir, cache_path,
                     group_and_select_packages, StringWithAttrs,
-                    create_work_dir, get_wheel_name, colored, build_wheel)
+                    create_work_dir, get_wheel_name, colored, build_wheel,
+                    canonicalize_distro_name)
 from .exceptions import VersionsConflicts
 
 
@@ -259,9 +259,11 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                 if not rebuild_wheels:
                     wheel_name = get_wheel_name(package_path)
                     distro = likely_distro(package)
-                    final_wheel_path = op.join(output_dir,
-                                               canonicalize_name(distro.key),
-                                               wheel_name)
+                    final_wheel_path = op.join(
+                        output_dir,
+                        canonicalize_distro_name(distro.key),
+                        wheel_name
+                    )
                     if op.exists(final_wheel_path):
                         print(colored('okgreen', '  %s already built, skipped'
                                       % final_wheel_path), file=sys.stderr)
@@ -286,7 +288,7 @@ def collect_packages(requirements, output_dir, cache_dependencies,
         print('Moving packages to their final destination...', file=sys.stderr)
         for package in packages:
             distro = likely_distro(package)
-            dst_dir = op.join(output_dir, canonicalize_name(distro.key))
+            dst_dir = op.join(output_dir, canonicalize_distro_name(distro.key))
             if not op.exists(dst_dir):
                 os.makedirs(dst_dir)
             move_forced(package, dst_dir)

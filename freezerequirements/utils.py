@@ -13,6 +13,7 @@ from collections import defaultdict
 from distutils.version import LooseVersion
 from itertools import takewhile
 import glob
+import re
 
 import sh
 from setuptools.package_index import distros_for_filename
@@ -27,6 +28,7 @@ CLI_COLORS = {
     'warning': 93,
     'fail': 91,
 }
+_canonicalize_regex = re.compile(r"[-_.]+")
 
 
 class cd(object):
@@ -242,3 +244,8 @@ def build_wheel(pip, source_archive):
     dist_dir = op.join(source_dir, 'dist')
     wheel_filename = glob.glob(op.join(dist_dir, '*.whl'))
     return wheel_filename[0]
+
+
+def canonicalize_name(name):
+    # This is taken from PEP 503.
+    return _canonicalize_regex.sub("-", name).lower()
