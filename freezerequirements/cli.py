@@ -72,6 +72,8 @@ def main():
         'multiple packages', metavar='PACKAGE')
 @click.option('--output-index-url', help='Add an --index-url in the generated '
         'requirements file', metavar='URL')
+@click.option('--output-find-links', multiple=True, metavar='URL',
+        help='Add a --find-links in the generated requirements file', )
 @click.option('--loose', 'loose_packages', multiple=True, metavar='PACKAGE',
         help='Do not specify version for PACKAGE in the output requirements '
         'file(s)')
@@ -83,7 +85,7 @@ def main():
 def freeze(requirements, output_dir, pip_cache, cache_dependencies,
         use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
         pip_insecures, excluded_packages, ext_wheels, output_index_url,
-        merged_requirements, separate_requirements,
+        output_find_links, merged_requirements, separate_requirements,
         separate_requirements_suffix, rebuild_wheels, exclude_requirements,
         loose_packages, loose_requirements, loose_requirements_suffix,
         max_conflict_resolution_iterations):
@@ -110,6 +112,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                 for p in excluded_reqs_fp
                 if p.strip() and not p.strip().startswith('#'))
     loose_packages = set(loose_packages)
+    output_find_links = list(output_find_links)
 
     check_versions_conflicts = separate_requirements
 
@@ -173,7 +176,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     if merged_requirements:
         format_requirements(merged_requirements, requirements_packages,
                 grouped_packages, excluded_packages, output_index_url,
-                ext_wheels_lines)
+                output_find_links, ext_wheels_lines)
         print('Wrote merged frozen requirements in %s' %
                 merged_requirements.name, file=sys.stderr)
 
@@ -185,7 +188,7 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             with open(filename, 'w') as fp:
                 format_requirements(fp, [(requirements_file, packages)],
                         grouped_packages, excluded_packages, output_index_url,
-                        ext_wheels_lines)
+                        output_find_links, ext_wheels_lines)
             print('Wrote separate frozen requirements for %s in %s' %
                     (requirements_file, filename), file=sys.stderr)
 
@@ -197,7 +200,8 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             with open(filename, 'w') as fp:
                 format_requirements(fp, [(requirements_file, packages)],
                         grouped_packages, excluded_packages, output_index_url,
-                        ext_wheels_lines, loose_packages=loose_packages)
+                        output_find_links, ext_wheels_lines,
+                        loose_packages=loose_packages)
             print('Wrote separate loose requirements for %s in %s' %
                     (requirements_file, filename), file=sys.stderr)
 
@@ -340,12 +344,15 @@ def collect_packages(requirements, output_dir, cache_dependencies,
 
 
 def format_requirements(fp, packages_groups, grouped_packages,
-        excluded_packages, output_index_url, ext_wheels_lines,
-        loose_packages=set()):
+        excluded_packages, output_index_url, output_find_links,
+        ext_wheels_lines, loose_packages=set()):
     fp.write('# This file has been automatically generated, DO NOT EDIT!\n')
     fp.write('\n')
     if output_index_url:
         fp.write('--index-url %s\n' % output_index_url, )
+        fp.write('\n')
+    for find_links in output_find_links:
+        fp.write('--find-links %s\n' % find_links, )
         fp.write('\n')
     seen = set()
     for requirements_file, packages in packages_groups:
