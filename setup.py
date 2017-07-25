@@ -12,6 +12,7 @@ version = '0.5.1'
 install_requires = [
     'click',
     'sh',
+    'six',
 ]
 
 

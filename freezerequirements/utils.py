@@ -13,6 +13,7 @@ from collections import defaultdict
 from distutils.version import LooseVersion
 from itertools import takewhile
 import glob
+import six
 
 import sh
 from setuptools.package_index import distros_for_filename
@@ -136,7 +137,7 @@ def group_and_select_packages(packages_groups):
     return dict(ret)
 
 
-class StringWithAttrs(unicode):
+class StringWithAttrs(six.text_type):
     '''
     An unicode subclass, to be able to add attributes.
     '''
