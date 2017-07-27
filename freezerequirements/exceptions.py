@@ -1,4 +1,6 @@
-class FreezeRequirementsError(Exception): pass
+class FreezeRequirementsError(Exception):
+
+    pass
 
 
 class VersionsConflicts(FreezeRequirementsError):
