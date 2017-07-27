@@ -12,8 +12,9 @@ import click
 from pip.req import InstallRequirement
 
 from .utils import (likely_distro, cache_dir, cache_path,
-        group_and_select_packages, StringWithAttrs, create_work_dir,
-        get_wheel_name, colored, build_wheel)
+                    group_and_select_packages, StringWithAttrs,
+                    create_work_dir, get_wheel_name, colored, build_wheel,
+                    canonicalize_distro_name)
 from .exceptions import VersionsConflicts
 
 
@@ -28,67 +29,60 @@ def main():
 
 @click.command()
 @click.argument('requirements', nargs=-1,
-        type=click.Path(exists=True, dir_okay=False))
+                type=click.Path(exists=True, dir_okay=False))
 @click.option('-o', '--output-dir', help='Put downloaded python packages '
-        'and wheels here', metavar='DIR')
+              'and wheels here', metavar='DIR')
 @click.option('-m', '--merged-requirements', type=click.File(mode='w'),
-        help='Merge all requirements in FILE', metavar='FILE')
+              help='Merge all requirements in FILE', metavar='FILE')
 @click.option('--separate-requirements/--no-separate-requirements',
-        default=False, help='Create separate frozen requirements next to each '
-        'input requirements file')
+              default=False, help='Create separate frozen requirements next '
+              'to each input requirements file')
 @click.option('--separate-requirements-suffix', default='-frozen',
-        help='suffix to insert before file extensions to create separate '
-        'frozen requirements filenames')
-@click.option('-c', '--pip-cache', help='Pip download cache', metavar='DIR')
-@click.option('--use-mirrors/--no-use-mirrors', default=False,
-        help='use pypi mirrors')
+              help='suffix to insert before file extensions to create '
+              'separate frozen requirements filenames')
 @click.option('--cache-dependencies/--no-cache-dependencies', default=False,
-        help='Use a cache to speed up processing of unchanged requirements '
-        'files')
+              help='Use a cache to speed up processing of unchanged '
+              'requirements files')
 @click.option('--pip', default='pip', help='Path to the pip executable',
-        type=click.Path(dir_okay=False))
+              type=click.Path(dir_okay=False))
 @click.option('--build-wheels/--no-build-wheels', default=False,
-        help='Build wheel packages from the requirements')
+              help='Build wheel packages from the requirements')
 @click.option('--rebuild-wheels/--no-rebuild-wheels', default=True,
-        help='Check for wheels in the output directory before rebuilding them')
-@click.option('--allow-external', 'pip_externals', multiple=True,
-        metavar='PACKAGE')
-@click.option('--allow-all-external/--no-allow-all-external',
-        'pip_allow_all_external', default=False)
-@click.option('--allow-insecure', 'pip_insecures', multiple=True,
-        metavar='PACKAGE')
+              help='Check for wheels in the output directory before '
+              'rebuilding them')
 @click.option('-x', '--exclude', 'excluded_packages', multiple=True,
-        help='Exclude a package from the frozen requirements; you may specify '
-        '--exclude multiple times; PACKAGE may also take the form '
-        '[req_path]:[package_name], to exclude a package from a specific '
-        'separate requirement', metavar='PACKAGE')
+              help='Exclude a package from the frozen requirements; you may '
+              'specify --exclude multiple times; PACKAGE may also take the '
+              'form [req_path]:[package_name], to exclude a package from '
+              'a specific separate requirement', metavar='PACKAGE')
 @click.option('--exclude-requirements', type=click.File(mode='r'),
-        multiple=True, help='Exclude packages contained in requirements FILE; '
-        'you may specify --exclude-requirements multiple times',
-        metavar='FILE')
+              multiple=True, help='Exclude packages contained in '
+              'requirements FILE; you may specify --exclude-requirements '
+              'multiple times', metavar='FILE')
 @click.option('--use-ext-wheel', 'ext_wheels', multiple=True,
-        help='Do not try to build wheel for PACKAGE, but still include it in '
-        'the frozen output; use --use-ext-wheel multiple times to specify '
-        'multiple packages', metavar='PACKAGE')
+              help='Do not try to build wheel for PACKAGE, but still '
+              'include it in the frozen output; use --use-ext-wheel '
+              'multiple times to specify multiple packages', metavar='PACKAGE')
 @click.option('--output-index-url', help='Add an --index-url in the generated '
-        'requirements file', metavar='URL')
+              'requirements file', metavar='URL')
 @click.option('--output-find-links', multiple=True, metavar='URL',
-        help='Add a --find-links in the generated requirements file', )
+              help='Add a --find-links in the generated requirements file', )
+              metavar='URL')
 @click.option('--loose', 'loose_packages', multiple=True, metavar='PACKAGE',
-        help='Do not specify version for PACKAGE in the output requirements '
-        'file(s)')
+              help='Do not specify version for PACKAGE in the output '
+              'requirements file(s)')
 @click.option('--loose-requirements/--no-loose-requirements', default=False,
-        help='Generate loose requirements files')
-@click.option('--loose-requirements-suffix', default='-loose', metavar='SUFFIX',
-        help='Loose requirements filenames are generated with this suffix')
+              help='Generate loose requirements files')
+@click.option('--loose-requirements-suffix', default='-loose',
+              metavar='SUFFIX', help='Loose requirements filenames are '
+              'generated with this suffix')
 @click.option('--max-conflict-resolution-iterations', default=10)
-def freeze(requirements, output_dir, pip_cache, cache_dependencies,
-        use_mirrors, pip, build_wheels, pip_externals, pip_allow_all_external,
-        pip_insecures, excluded_packages, ext_wheels, output_index_url,
-        output_find_links, merged_requirements, separate_requirements,
-        separate_requirements_suffix, rebuild_wheels, exclude_requirements,
-        loose_packages, loose_requirements, loose_requirements_suffix,
-        max_conflict_resolution_iterations):
+def freeze(requirements, output_dir, cache_dependencies, pip, build_wheels,
+           excluded_packages, ext_wheels, output_index_url, output_find_links,
+           merged_requirements, separate_requirements,
+           separate_requirements_suffix, rebuild_wheels, exclude_requirements,
+           loose_packages, loose_requirements, loose_requirements_suffix,
+           max_conflict_resolution_iterations):
     '''
     Create a frozen requirement file from one or more requirement files.
     '''
@@ -96,11 +90,11 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     if output_dir:
         if not op.isdir(output_dir):
             print('Output directory does not exist: %s' % output_dir,
-                    file=sys.stderr)
+                  file=sys.stderr)
             sys.exit(1)
     elif build_wheels:
         print('Using --build-wheels without --output makes no sense',
-                file=sys.stderr)
+              file=sys.stderr)
         sys.exit(1)
 
     # Pre-process options
@@ -108,9 +102,10 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     requirements = list(requirements)
     excluded_packages.extend(ext_wheels)
     for excluded_reqs_fp in exclude_requirements:
-        excluded_packages.extend(p.strip()
-                for p in excluded_reqs_fp
-                if p.strip() and not p.strip().startswith('#'))
+        excluded_packages.extend(
+            p.strip() for p in excluded_reqs_fp
+            if p.strip() and not p.strip().startswith('#')
+        )
     loose_packages = set(loose_packages)
     output_find_links = list(output_find_links)
 
@@ -142,7 +137,8 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
                         filtered_lines.append(line)
             if excluded_something:
                 filtered_reqs = tempfile.NamedTemporaryFile(
-                        prefix='freeze-requirements-filtered-reqs-')
+                    prefix='freeze-requirements-filtered-reqs-'
+                )
                 filtered_reqs.writelines(filtered_lines)
                 filtered_reqs.flush()
                 filtered_reqs.name = StringWithAttrs(filtered_reqs.name)
@@ -154,31 +150,31 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
     for _ in range(max_conflict_resolution_iterations):
         try:
             requirements_packages, grouped_packages = collect_packages(
-                    requirements, output_dir, cache_dependencies, build_wheels,
-                    rebuild_wheels, pip, pip_cache, use_mirrors,
-                    pip_allow_all_external, pip_externals, pip_insecures,
-                    check_versions_conflicts)
+                requirements, output_dir, cache_dependencies, build_wheels,
+                rebuild_wheels, pip, check_versions_conflicts
+            )
         except VersionsConflicts as exc:
             if not exc.reqs_cache_paths:
                 sys.exit(1)
             print('Trying to automatically resolve conflicts by reprocessing '
-                    'cached dependencies', file=sys.stderr)
+                  'cached dependencies', file=sys.stderr)
             for path in exc.reqs_cache_paths:
                 os.unlink(path)
         else:
             break
     else:
         print('Failed to resolve conflicts after %s retries' %
-                max_conflict_resolution_iterations, file=sys.stderr)
+              max_conflict_resolution_iterations, file=sys.stderr)
         sys.exit(1)
 
     # Format merged requirements
     if merged_requirements:
         format_requirements(merged_requirements, requirements_packages,
-                grouped_packages, excluded_packages, output_index_url,
-                output_find_links, ext_wheels_lines)
+                            grouped_packages, excluded_packages,
+                            output_index_url, output_find_links,
+                            ext_wheels_lines)
         print('Wrote merged frozen requirements in %s' %
-                merged_requirements.name, file=sys.stderr)
+              merged_requirements.name, file=sys.stderr)
 
     # Format separate requirements
     if separate_requirements:
@@ -187,10 +183,11 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             filename = root + separate_requirements_suffix + ext
             with open(filename, 'w') as fp:
                 format_requirements(fp, [(requirements_file, packages)],
-                        grouped_packages, excluded_packages, output_index_url,
-                        output_find_links, ext_wheels_lines)
+                                    grouped_packages, excluded_packages,
+                                    output_index_url, output_find_links,
+                                    ext_wheels_lines)
             print('Wrote separate frozen requirements for %s in %s' %
-                    (requirements_file, filename), file=sys.stderr)
+                  (requirements_file, filename), file=sys.stderr)
 
     # Format loose requirements
     if loose_requirements and loose_packages:
@@ -199,17 +196,17 @@ def freeze(requirements, output_dir, pip_cache, cache_dependencies,
             filename = root + loose_requirements_suffix + ext
             with open(filename, 'w') as fp:
                 format_requirements(fp, [(requirements_file, packages)],
-                        grouped_packages, excluded_packages, output_index_url,
-                        output_find_links, ext_wheels_lines,
-                        loose_packages=loose_packages)
+                                    grouped_packages, excluded_packages,
+                                    output_index_url, output_find_links,
+                                    ext_wheels_lines,
+                                    loose_packages=loose_packages)
             print('Wrote separate loose requirements for %s in %s' %
-                    (requirements_file, filename), file=sys.stderr)
+                  (requirements_file, filename), file=sys.stderr)
 
 
 def collect_packages(requirements, output_dir, cache_dependencies,
-        build_wheels, rebuild_wheels, pip_bin, pip_cache, use_mirrors,
-        pip_allow_all_external, pip_externals, pip_insecures,
-        check_versions_conflicts):
+                     build_wheels, rebuild_wheels, pip_bin,
+                     check_versions_conflicts):
     '''
     Collect all packages and their requirements to *output_dir*, optionally
     build wheel files in the process.
@@ -229,16 +226,16 @@ def collect_packages(requirements, output_dir, cache_dependencies,
     for requirement in requirements:
         # Check cache
         original_requirement = getattr(requirement, 'original_name',
-                requirement)
+                                       requirement)
         if cache_dependencies:
             deps_cache_path = cache_path(original_requirement)
             if op.exists(deps_cache_path):
                 print('%s dependencies found in cache' % original_requirement,
-                        file=sys.stderr)
+                      file=sys.stderr)
                 with open(deps_cache_path) as fp:
                     dependencies = json.load(fp)
                 requirements_packages.append((original_requirement,
-                    dependencies))
+                                              dependencies))
                 # Store dependencies cache path for each distro name in it, so
                 # we can retrieve cache files associated with version conflicts
                 # later
@@ -250,22 +247,9 @@ def collect_packages(requirements, output_dir, cache_dependencies,
         # Download python source packages from requirement file
         print('  Downloading packages...', file=sys.stderr)
         temp_dir = create_work_dir()
-        pip_args = ['--no-use-wheel']
-        pip_kwargs = {'requirement': requirement, 'download': temp_dir}
-        if pip_cache:
-            if not op.exists(pip_cache):
-                os.makedirs(pip_cache)
-            pip_kwargs['download_cache'] = pip_cache
-        if use_mirrors:
-            pip_args.append('--use-mirrors')
-        if pip_allow_all_external:
-            pip_args.append('--allow-all-external')
-        for external in pip_externals:
-            pip_args += ['--allow-external', external]
-        for insecure in pip_insecures:
-            pip_args += ['--allow-insecure', insecure]
         try:
-            pip.install(*pip_args, **pip_kwargs)
+            pip.download(requirement=requirement, dest=temp_dir,
+                         no_binary=':all:')
         except sh.ErrorReturnCode as exc:
             print(exc.stdout, file=sys.stderr)
             print(exc.stderr, file=sys.stderr)
@@ -282,15 +266,18 @@ def collect_packages(requirements, output_dir, cache_dependencies,
                 if not rebuild_wheels:
                     wheel_name = get_wheel_name(package_path)
                     distro = likely_distro(package)
-                    final_wheel_path = op.join(output_dir, distro.key,
-                            wheel_name)
+                    final_wheel_path = op.join(
+                        output_dir,
+                        canonicalize_distro_name(distro.key),
+                        wheel_name
+                    )
                     if op.exists(final_wheel_path):
-                        print(colored('okgreen', '  %s already built, skipped' %
-                                final_wheel_path), file=sys.stderr)
+                        print(colored('okgreen', '  %s already built, skipped'
+                                      % final_wheel_path), file=sys.stderr)
                         continue
                     else:
                         print(colored('okblue', '  %s not found, rebuilding' %
-                                final_wheel_path), file=sys.stderr)
+                                      final_wheel_path), file=sys.stderr)
                 # Nope, build wheel
                 final_path = op.join(packages_collect_dir, package)
                 wheels[final_path] = build_wheel(pip, package_path)
@@ -303,13 +290,12 @@ def collect_packages(requirements, output_dir, cache_dependencies,
 
     # Move packages to their final destination
     packages = [op.join(packages_collect_dir, p)
-            for p in os.listdir(packages_collect_dir)]
+                for p in os.listdir(packages_collect_dir)]
     if output_dir and packages:
-        print('Moving packages to their final destination...',
-                file=sys.stderr)
+        print('Moving packages to their final destination...', file=sys.stderr)
         for package in packages:
             distro = likely_distro(package)
-            dst_dir = op.join(output_dir, distro.key)
+            dst_dir = op.join(output_dir, canonicalize_distro_name(distro.key))
             if not op.exists(dst_dir):
                 os.makedirs(dst_dir)
             move_forced(package, dst_dir)
@@ -330,9 +316,11 @@ def collect_packages(requirements, output_dir, cache_dependencies,
         for distro, versions in grouped_packages.items():
             if len(versions) > 1:
                 lines = ['  - %s:' % distro]
-                lines.extend('    - %s==%s coming from %s' %
-                        (distro, version, ', '.join(requirements))
-                        for version, requirements in versions)
+                lines.extend(
+                    '    - %s==%s coming from %s' %
+                    (distro, version, ', '.join(requirements))
+                    for version, requirements in versions
+                )
                 errors.append('\n'.join(lines))
                 deps_cache_paths.update(deps_cache_map[distro])
         if errors:
@@ -344,8 +332,9 @@ def collect_packages(requirements, output_dir, cache_dependencies,
 
 
 def format_requirements(fp, packages_groups, grouped_packages,
-        excluded_packages, output_index_url, output_find_links,
-        ext_wheels_lines, loose_packages=set()):
+                        excluded_packages, output_index_url,
+                        output_find_links, ext_wheels_lines,
+                        loose_packages=set()):
     fp.write('# This file has been automatically generated, DO NOT EDIT!\n')
     fp.write('\n')
     if output_index_url:
@@ -362,7 +351,8 @@ def format_requirements(fp, packages_groups, grouped_packages,
         for distro in sorted(distros, key=lambda d: d.key):
             if (distro.key in seen or
                     distro.key in excluded_packages or
-                    '%s:%s' % (requirements_file, distro.key) in excluded_packages):
+                    '%s:%s' % (requirements_file, distro.key) in
+                    excluded_packages):
                 continue
             seen.add(distro.key)
             versions = grouped_packages[distro.key]
