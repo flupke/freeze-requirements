@@ -66,8 +66,7 @@ def main():
 @click.option('--output-index-url', help='Add an --index-url in the generated '
               'requirements file', metavar='URL')
 @click.option('--output-find-links', multiple=True, metavar='URL',
-              help='Add a --find-links in the generated requirements file', )
-              metavar='URL')
+              help='Add a --find-links in the generated requirements file')
 @click.option('--loose', 'loose_packages', multiple=True, metavar='PACKAGE',
               help='Do not specify version for PACKAGE in the output '
               'requirements file(s)')
