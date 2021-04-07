@@ -9,7 +9,10 @@ import collections
 
 import sh
 import click
-from pip.req import InstallRequirement
+try: # for pip >= 10
+    from pip._internal.req import InstallRequirement
+except ImportError: # for pip <= 9.0.3
+    from pip.req import InstallRequirement
 
 from .utils import (likely_distro, cache_dir, cache_path,
                     group_and_select_packages, StringWithAttrs,
